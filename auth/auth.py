@@ -62,26 +62,29 @@ def render_login_page():
         max-width: 440px;
         margin: 2rem auto;
         padding: 2.5rem 2rem;
-        border-radius: 16px;
-        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-        box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+        border-radius: 12px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(79,70,229,0.13);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 4px 24px rgba(0,0,0,0.2);
     }
     .auth-title {
         text-align: center;
-        font-size: 1.8rem;
+        font-size: 2rem;
         font-weight: 700;
-        color: #1e293b;
+        color: #F3F3F5;
+        font-family: 'Outfit', sans-serif;
         margin-bottom: 0.25rem;
     }
     .auth-subtitle {
         text-align: center;
-        color: #64748b;
+        color: #838590;
         margin-bottom: 1.5rem;
         font-size: 0.95rem;
     }
     .auth-divider {
         text-align: center;
-        color: #94a3b8;
+        color: #838590;
         font-size: 0.85rem;
         margin: 1rem 0;
     }
@@ -135,20 +138,23 @@ def render_register_page():
         max-width: 440px;
         margin: 2rem auto;
         padding: 2.5rem 2rem;
-        border-radius: 16px;
-        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-        box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+        border-radius: 12px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(79,70,229,0.13);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 4px 24px rgba(0,0,0,0.2);
     }
     .auth-title {
         text-align: center;
-        font-size: 1.8rem;
+        font-size: 2rem;
         font-weight: 700;
-        color: #1e293b;
+        color: #F3F3F5;
+        font-family: 'Outfit', sans-serif;
         margin-bottom: 0.25rem;
     }
     .auth-subtitle {
         text-align: center;
-        color: #64748b;
+        color: #838590;
         margin-bottom: 1.5rem;
         font-size: 0.95rem;
     }

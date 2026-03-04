@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartScribe — AI-Powered Essay Evaluation</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Outfit:wght@600;700&family=Roboto+Mono:wght@500&display=swap" rel="stylesheet">
+    
+    <style>
+        /* CSS Reset & Variables */
+        :root {
+            --bg-base: #05050A;
+            --bg-alt: #0A0A12;
+            --accent-primary: #4F46E5;
+            --accent-secondary: #7C3AED;
+            --text-primary: #F3F3F5;
+            --text-muted: #838590;
+            --glass-bg: rgba(255,255,255,0.04);
+            --glass-border: rgba(79,70,229,0.13);
+            
+            --glow-sm: 0 0 20px rgba(79,70,229,0.4);
+            --glow-md: 0 0 40px rgba(79,70,229,0.3);
+            --glow-lg: 0 0 60px rgba(79,70,229,0.2);
+            
+            --font-head: 'Outfit', sans-serif;
+            --font-mono: 'Roboto Mono', monospace;
+            --font-body: 'Inter', sans-serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            overflow-x: hidden;
+            /* Dot grid background */
+            background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            background-size: 24px 24px;
+            cursor: none; /* Custom cursor */
+        }
+
+        /* Body vignette */
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            box-shadow: inset 0 0 150px rgba(0,0,0,0.9);
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        a { text-decoration: none; color: inherit; }
+        ul { list-style: none; }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Typography */
+        h1, h2, h3 { font-family: var(--font-head); }
+        .eyebrow, .nav-links, .tag, .stat-num { font-family: var(--font-mono); }
+
+        /* Custom Cursor */
+        #cursor-dot, #cursor-ring {
+            position: fixed;
+            top: 0; left: 0;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            mix-blend-mode: difference;
+        }
+        #cursor-dot {
+            width: 8px; height: 8px;
+            background: #fff;
+        }
+        #cursor-ring {
+            width: 32px; height: 32px;
+            border: 1px solid rgba(255,255,255,0.4);
+            transition: width 0.2s, height 0.2s, top 0.1s ease-out, left 0.1s ease-out;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0; width: 100%;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255,255,255,0.02);
+            z-index: 1000;
+            transition: background 0.3s ease;
+        }
+        .nav-inner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+        .logo {
+            font-family: var(--font-head);
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            position: relative;
+        }
+        .logo span { color: var(--accent-primary); }
+        .nav-links {
+            display: flex;
+            gap: 40px;
+            font-size: 14px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .nav-links li a {
+            transition: color 0.3s;
+        }
+        .nav-links li a:hover {
+            color: var(--text-primary);
+        }
+        .nav-actions { display: flex; gap: 16px; }
+        
+        /* Buttons */
+        .btn {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            padding: 12px 24px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: none;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-ghost {
+            background: transparent;
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+        }
+        .btn-ghost:hover {
+            border-color: var(--accent-primary);
+            box-shadow: var(--glow-sm);
+        }
+        .btn-primary {
+            background: var(--accent-primary);
+            border: 1px solid var(--accent-primary);
+            color: #fff;
+            box-shadow: var(--glow-md);
+        }
+        .btn-primary:hover {
+            background: #5d54ff;
+            box-shadow: var(--glow-lg);
+        }
+
+        /* Hero Section */
+        #hero {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            padding-top: 80px;
+        }
+        .hero-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: center;
+        }
+        .hero-content .eyebrow {
+            color: var(--accent-secondary);
+            font-size: 14px;
+            margin-bottom: 24px;
+            display: inline-block;
+            animation: pulseText 3s infinite;
+        }
+        .hero-title {
+            font-size: 72px;
+            line-height: 1.1;
+            margin-bottom: 32px;
+            letter-spacing: -2px;
+        }
+        .hero-title span {
+            color: var(--accent-primary);
+            text-shadow: var(--glow-sm);
+        }
+        .hero-sub {
+            font-size: 18px;
+            color: var(--text-muted);
+            line-height: 1.6;
+            margin-bottom: 48px;
+            max-width: 480px;
+        }
+        .hero-actions {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 64px;
+        }
+
+        /* Canvas Background */
+        #bg-canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: -1;
+            opacity: 0.4;
+        }
+
+        /* 3D Visual element */
+        .visual-container {
+            perspective: 1000px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .app-window {
+            width: 100%;
+            height: 400px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            backdrop-filter: blur(16px);
+            transform: rotateY(-10deg) rotateX(10deg);
+            transition: transform 0.1s;
+            box-shadow: -20px 20px 60px rgba(0,0,0,0.5), inset 0 0 20px rgba(255,255,255,0.02);
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        .app-header {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+        .app-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: #333;
+        }
+        .app-dot:nth-child(1) { background: #ff5f56; }
+        .app-dot:nth-child(2) { background: #ffbd2e; }
+        .app-dot:nth-child(3) { background: #27c93f; }
+        
+        .code-lines {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .hl-line {
+            height: 12px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.1);
+            width: 100%;
+        }
+        .hl-line.accent {
+            background: rgba(79,70,229,0.3);
+            width: 80%;
+            box-shadow: var(--glow-sm);
+        }
+        
+        .floating-label {
+            position: absolute;
+            background: var(--glass-bg);
+            border: 1px solid var(--accent-primary);
+            padding: 6px 12px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--accent-primary);
+            border-radius: 4px;
+            box-shadow: var(--glow-sm);
+            top: 150px; right: 40px;
+            animation: float 4s ease-in-out infinite;
+        }
+
+        /* Sections common */
+        .section {
+            padding: 120px 0;
+        }
+        .section-alt {
+            background-color: var(--bg-alt);
+        }
+        .section-header {
+            margin-bottom: 80px;
+            text-align: center;
+        }
+        .section-title {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        .section-desc {
+            color: var(--text-muted);
+            font-size: 18px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* CSS Grid Layouts */
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+
+        /* Cards */
+        .glass-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            padding: 40px 32px;
+            border-radius: 12px;
+            backdrop-filter: blur(8px);
+            transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s;
+            position: relative;
+            overflow: hidden;
+            opacity: 0;
+            transform: translateY(40px);
+        }
+        .glass-card:hover {
+            transform: translateY(-8px);
+            border-color: rgba(79,70,229,0.4);
+            box-shadow: var(--glow-md);
+        }
+        .card-icon {
+            font-size: 32px;
+            margin-bottom: 24px;
+            color: var(--accent-primary);
+            text-shadow: var(--glow-sm);
+        }
+        .card-title {
+            font-size: 20px;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+        .card-desc {
+            font-size: 15px;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        /* How it works */
+        .step-card {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        .step-num {
+            font-family: var(--font-mono);
+            font-size: 64px;
+            font-weight: 700;
+            color: var(--accent-secondary);
+            opacity: 0.2;
+            margin-bottom: -20px;
+        }
+        
+        /* Footer */
+        footer {
+            padding: 60px 0;
+            border-top: 1px solid var(--glass-border);
+        }
+        .footer-inner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        /* Animations */
+        @keyframes pulseText {
+            0%, 100% { opacity: 1; text-shadow: var(--glow-sm); }
+            50% { opacity: 0.6; text-shadow: none; }
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        /* Reveal class applied via JS */
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="cursor-dot"></div>
+    <div id="cursor-ring"></div>
+    <canvas id="bg-canvas"></canvas>
+
+    <nav id="navbar">
+        <div class="container nav-inner">
+            <div class="logo">Smart<span>Scribe</span></div>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#how">How it Works</a></li>
+                <li><a href="http://localhost:8501" target="_blank">App</a></li>
+            </ul>
+            <div class="nav-actions">
+                <a href="http://localhost:8501/login" class="btn btn-ghost">Sign In</a>
+                <a href="http://localhost:8501/register" class="btn btn-primary">Get Started</a>
+            </div>
+        </div>
+    </nav>
+
+    <section id="hero">
+        <div class="container hero-grid">
+            <div class="hero-content">
+                <span class="eyebrow">v1.0 NLP Engine Active</span>
+                <h1 class="hero-title">Write better essays, <span>instantly.</span></h1>
+                <p class="hero-sub">SmartScribe automatically evaluates essays and provides scores along with clear, actionable feedback using sophisticated artificial intelligence and natural language processing.</p>
+                <div class="hero-actions">
+                    <a href="http://localhost:8501/evaluate" class="btn btn-primary">Start Writing</a>
+                    <a href="#features" class="btn btn-ghost">View Features</a>
+                </div>
+            </div>
+            <div class="visual-container" id="3d-container">
+                <div class="app-window" id="3d-window">
+                    <div class="app-header">
+                        <div class="app-dot"></div>
+                        <div class="app-dot"></div>
+                        <div class="app-dot"></div>
+                    </div>
+                    <div class="code-lines">
+                        <div class="hl-line"></div>
+                        <div class="hl-line" style="width: 60%"></div>
+                        <div class="hl-line accent"></div>
+                        <div class="hl-line" style="width: 90%"></div>
+                        <div class="hl-line" style="width: 40%"></div>
+                    </div>
+                    <div class="floating-label">{"Coherence": 0.94}</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="section section-alt">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Powerful Features</h2>
+                <p class="section-desc">Clinical precision for every dimension of your writing.</p>
+            </div>
+            <div class="grid-3">
+                <div class="glass-card reveal" style="transition-delay: 0.1s">
+                    <div class="card-icon">01</div>
+                    <h3 class="card-title">Grammar Analysis</h3>
+                    <p class="card-desc">Deep NLP-powered checks for spelling, punctuation, and sentence structure anomalies with contextual awareness.</p>
+                </div>
+                <div class="glass-card reveal" style="transition-delay: 0.2s">
+                    <div class="card-icon">02</div>
+                    <h3 class="card-title">Coherence Scoring</h3>
+                    <p class="card-desc">Measures logical flow, paragraph transitions, and readability indexing to ensure algorithmic structural integrity.</p>
+                </div>
+                <div class="glass-card reveal" style="transition-delay: 0.3s">
+                    <div class="card-icon">03</div>
+                    <h3 class="card-title">Argument Evaluation</h3>
+                    <p class="card-desc">Analyzes thesis strength, evidence quality, and reasoning depth against rigorous academic heuristics.</p>
+                </div>
+                <div class="glass-card reveal" style="transition-delay: 0.1s">
+                    <div class="card-icon">04</div>
+                    <h3 class="card-title">Rubric-Based Scoring</h3>
+                    <p class="card-desc">Multi-dimensional deterministic scoring strictly aligned with standardized academic evaluation rubrics.</p>
+                </div>
+                <div class="glass-card reveal" style="transition-delay: 0.2s">
+                    <div class="card-icon">05</div>
+                    <h3 class="card-title">Smart Feedback</h3>
+                    <p class="card-desc">Actionable, granular section-level improvement vectors generated dynamically for immediate refinement.</p>
+                </div>
+                <div class="glass-card reveal" style="transition-delay: 0.3s">
+                    <div class="card-icon">06</div>
+                    <h3 class="card-title">Progress Tracking</h3>
+                    <p class="card-desc">Time-series comparison of submissions with visual vector charts plotted over your historic data baseline.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="how" class="section">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Execution Flow</h2>
+                <p class="section-desc">A frictionless pipeline from draft to perfection.</p>
+            </div>
+            <div class="grid-3">
+                <div class="step-card reveal" style="transition-delay: 0.1s">
+                    <div class="step-num">1</div>
+                    <h3 class="card-title">Initialize Input</h3>
+                    <p class="card-desc">Submit your raw text block. Streamlit interface securely transmits data to our backend infrastructure.</p>
+                </div>
+                <div class="step-card reveal" style="transition-delay: 0.3s">
+                    <div class="step-num">2</div>
+                    <h3 class="card-title">NLP Evaluation</h3>
+                    <p class="card-desc">Our models parse your abstract syntax tree for grammar, computing vector depth for coherence and argumentation.</p>
+                </div>
+                <div class="step-card reveal" style="transition-delay: 0.5s">
+                    <div class="step-num">3</div>
+                    <h3 class="card-title">Iterate & Elevate</h3>
+                    <p class="card-desc">Review deterministic feedback telemetry, adjust your document, and observe continuous velocity tracking.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container footer-inner">
+            <div class="logo">Smart<span>Scribe</span></div>
+            <div style="font-family: var(--font-mono); color: var(--text-muted); font-size: 14px;">
+                Designed for the exceptional.
+            </div>
+            <ul class="nav-links" style="gap: 20px;">
+                <li><a href="https://github.com/Prateekiiitg56/SmartScribe" target="_blank">GitHub</a></li>
+                <li><a href="/login">Auth</a></li>
+            </ul>
+        </div>
+    </footer>
+
+    <script>
+        // Custom Cursor
+        const dot = document.getElementById('cursor-dot');
+        const ring = document.getElementById('cursor-ring');
+        
+        let mouseX = 0, mouseY = 0;
+        let ringX = 0, ringY = 0;
+        
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            
+            dot.style.transform = `translate(${mouseX}px, ${mouseY}px)`;
+        });
+        
+        function animateRing() {
+            ringX += (mouseX - ringX) * 0.15;
+            ringY += (mouseY - ringY) * 0.15;
+            ring.style.transform = `translate(${ringX}px, ${ringY}px)`;
+            requestAnimationFrame(animateRing);
+        }
+        animateRing();
+
+        // 3D Tilt Effect
+        const win3d = document.getElementById('3d-window');
+        document.addEventListener('mousemove', (e) => {
+            const xAxis = (window.innerWidth / 2 - e.pageX) / 50;
+            const yAxis = (window.innerHeight / 2 - e.pageY) / 50;
+            win3d.style.transform = `rotateY(${xAxis - 10}deg) rotateX(${yAxis + 10}deg)`;
+        });
+
+        // Scroll reveals
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if(entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.1 });
+        
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+        // Nav darkening on scroll
+        const nav = document.getElementById('navbar');
+        window.addEventListener('scroll', () => {
+            if(window.scrollY > 80) {
+                nav.style.background = 'rgba(5, 5, 10, 0.9)';
+            } else {
+                nav.style.background = 'transparent';
+            }
+        });
+
+        // Canvas Particles (NLP Mesh illusion)
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const particles = [];
+        for(let i=0; i<80; i++){
+            particles.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                vx: (Math.random() - 0.5) * 0.5,
+                vy: (Math.random() - 0.5) * 0.5,
+                size: Math.random() * 2
+            });
+        }
+
+        function drawLines() {
+            for(let i=0; i<particles.length; i++) {
+                for(let j=i+1; j<particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if(dist < 150) {
+                        ctx.beginPath();
+                        ctx.strokeStyle = `rgba(124, 58, 237, ${0.15 - (dist/150)*0.15})`;
+                        ctx.lineWidth = 1;
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        function animateCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                if(p.x < 0 || p.x > canvas.width) p.vx *= -1;
+                if(p.y < 0 || p.y > canvas.height) p.vy *= -1;
+                
+                ctx.fillStyle = '#4F46E5';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            drawLines();
+            requestAnimationFrame(animateCanvas);
+        }
+        animateCanvas();
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>

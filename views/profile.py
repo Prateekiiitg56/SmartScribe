@@ -22,31 +22,34 @@ _CSS = """
 .profile-header .avatar {
     width: 100px; height: 100px;
     border-radius: 50%;
-    background: linear-gradient(135deg,#4F46E5,#7C3AED);
+    background: linear-gradient(135deg, #4F46E5, #7C3AED);
+    box-shadow: 0 0 20px rgba(79,70,229,0.4);
     color: #fff;
     font-size: 2.5rem;
     line-height: 100px;
     margin: 0 auto 0.75rem;
     font-weight: 700;
+    font-family: 'Outfit', sans-serif;
 }
 .profile-header h2 {
-    margin: 0; font-weight: 700; color: #1e293b;
+    margin: 0; font-weight: 700; color: #F3F3F5; font-family: 'Outfit', sans-serif;
 }
 .profile-header p {
-    color: #64748b; font-size: 0.92rem;
+    color: #838590; font-size: 0.95rem; font-family: 'Roboto Mono', monospace;
 }
 .profile-stat {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(79,70,229,0.13);
     border-radius: 12px;
     padding: 1.2rem;
     text-align: center;
+    backdrop-filter: blur(8px);
 }
 .profile-stat .num {
-    font-size: 1.6rem; font-weight: 800; color: #4F46E5;
+    font-size: 1.8rem; font-weight: 700; color: #4F46E5; font-family: 'Roboto Mono', monospace;
 }
 .profile-stat .lbl {
-    font-size: 0.82rem; color: #64748b;
+    font-size: 0.85rem; color: #838590; font-family: 'Outfit', sans-serif; text-transform: uppercase; letter-spacing: 0.5px;
 }
 </style>
 """
@@ -178,7 +181,10 @@ def render_profile_page():
                     xaxis_title="Date",
                     yaxis_title="Score (out of 10)",
                     yaxis=dict(range=[0, 10.5]),
-                    template="plotly_white",
+                    template="plotly_dark",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(family="Inter, sans-serif", color="#F3F3F5"),
                     height=350,
                     margin=dict(t=40, b=30),
                 )

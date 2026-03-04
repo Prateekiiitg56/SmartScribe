@@ -10,22 +10,40 @@ from auth.auth import is_logged_in
 # ─── CSS shared by both views ───────────────────────────────────────────────────
 _COMMON_CSS = """
 <style>
+/* ── Variables ── */
+:root {
+    --bg-base: #05050A;
+    --bg-alt: #0A0A12;
+    --accent-primary: #4F46E5;
+    --accent-secondary: #7C3AED;
+    --text-primary: #F3F3F5;
+    --text-muted: #838590;
+    --glass-bg: rgba(255,255,255,0.04);
+    --glass-border: rgba(79,70,229,0.13);
+    
+    --glow-sm: 0 0 20px rgba(79,70,229,0.4);
+    --glow-md: 0 0 40px rgba(79,70,229,0.3);
+}
+
 /* ── Hero ────────────────────────── */
 .hero {
     text-align: center;
     padding: 3rem 1rem 2rem;
 }
 .hero h1 {
-    font-size: 2.8rem;
-    font-weight: 800;
-    background: linear-gradient(135deg, #4F46E5, #7C3AED);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    font-size: 3.5rem;
+    font-weight: 700;
+    letter-spacing: -1.5px;
     margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+.hero h1 span {
+    color: var(--accent-primary);
+    text-shadow: var(--glow-sm);
 }
 .hero .tagline {
     font-size: 1.15rem;
-    color: #64748b;
+    color: var(--text-muted);
     max-width: 600px;
     margin: 0 auto 2rem;
     line-height: 1.6;
@@ -33,86 +51,114 @@ _COMMON_CSS = """
 
 /* ── Feature cards ───────────────── */
 .feature-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 14px;
-    padding: 1.6rem;
-    text-align: center;
-    transition: transform 0.2s, box-shadow 0.2s;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 2rem 1.5rem;
+    text-align: left;
+    backdrop-filter: blur(8px);
+    transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s;
     height: 100%;
 }
 .feature-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 28px rgba(79,70,229,0.10);
+    transform: translateY(-8px);
+    border-color: rgba(79,70,229,0.4);
+    box-shadow: var(--glow-md);
 }
 .feature-icon {
-    font-size: 2.2rem;
-    margin-bottom: 0.6rem;
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    color: var(--accent-primary);
+    text-shadow: var(--glow-sm);
 }
 .feature-card h3 {
-    font-size: 1.05rem;
-    color: #1e293b;
-    margin-bottom: 0.4rem;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    margin-bottom: 0.8rem;
+    font-family: 'Outfit', sans-serif;
 }
 .feature-card p {
-    font-size: 0.88rem;
-    color: #64748b;
-    line-height: 1.5;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    line-height: 1.6;
 }
 
 /* ── How-it-works steps ──────────── */
 .step-badge {
     display: inline-block;
-    width: 36px; height: 36px;
-    line-height: 36px;
-    border-radius: 50%;
-    background: #4F46E5;
-    color: #fff;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 4rem;
     font-weight: 700;
-    font-size: 1rem;
-    text-align: center;
-    margin-bottom: 0.5rem;
+    color: var(--accent-secondary);
+    opacity: 0.2;
+    margin-bottom: -15px;
+    line-height: 1;
 }
 .step-title {
     font-weight: 600;
-    font-size: 1rem;
-    color: #1e293b;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
 }
 .step-desc {
-    font-size: 0.88rem;
-    color: #64748b;
+    font-size: 0.95rem;
+    color: var(--text-muted);
 }
 
 /* ── Stats row ───────────────────── */
 .stat-card {
-    background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
-    border-radius: 14px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
     padding: 1.4rem;
     text-align: center;
-    color: #fff;
+    backdrop-filter: blur(8px);
 }
 .stat-card .num {
-    font-size: 1.8rem;
-    font-weight: 800;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: 'Roboto Mono', monospace;
 }
 .stat-card .label {
     font-size: 0.85rem;
-    opacity: 0.85;
+    color: var(--accent-primary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
 /* section header */
 .section-header {
     text-align: center;
-    font-size: 1.5rem;
+    font-size: 2.2rem;
     font-weight: 700;
-    color: #1e293b;
-    margin: 2.5rem 0 1rem;
+    color: var(--text-primary);
+    margin: 3.5rem 0 1rem;
+    font-family: 'Outfit', sans-serif;
 }
 .section-sub {
     text-align: center;
-    color: #64748b;
-    font-size: 0.95rem;
-    margin-bottom: 1.5rem;
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    margin-bottom: 2.5rem;
+}
+
+/* stMetric Override (for Dashboard) */
+div[data-testid="stMetricValue"] {
+    font-family: 'Roboto Mono', monospace;
+    color: #4F46E5 !important;
+    text-shadow: 0 0 10px rgba(79,70,229,0.3);
+}
+div[data-testid="stMetricLabel"] {
+    color: #838590 !important;
+}
+
+/* Expander styling */
+.streamlit-expanderHeader {
+    background-color: rgba(255,255,255,0.02) !important;
+    border: 1px solid rgba(79,70,229,0.13) !important;
+    border-radius: 8px !important;
+    color: #F3F3F5 !important;
 }
 </style>
 """

@@ -24,33 +24,70 @@ init_session()
 # ─── Global CSS overrides ───────────────────────────────────────────────────────
 st.markdown("""
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Outfit:wght@600;700&family=Roboto+Mono:wght@500&display=swap');
+
+    html, body, [class*="css"]  {
+        font-family: 'Inter', sans-serif;
+    }
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Outfit', sans-serif !important;
+    }
+
     /* Hide Streamlit default header/footer */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
-    /* Sidebar polish */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #4F46E5 0%, #7C3AED 100%);
-    }
-    [data-testid="stSidebar"] * {
-        color: #ffffff !important;
-    }
-    [data-testid="stSidebar"] .stButton > button {
-        background: rgba(255,255,255,0.15);
-        border: 1px solid rgba(255,255,255,0.3);
-        color: #fff !important;
-        border-radius: 8px;
-        font-weight: 600;
-        transition: background 0.2s;
-    }
-    [data-testid="stSidebar"] .stButton > button:hover {
-        background: rgba(255,255,255,0.25);
+    /* Main background */
+    .stApp {
+        background-color: #05050A;
+        background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 24px 24px;
     }
 
-    /* Card-like containers */
+    /* Sidebar polish */
+    [data-testid="stSidebar"] {
+        background: #0A0A12 !important;
+        border-right: 1px solid rgba(79,70,229,0.13) !important;
+    }
+    
+    [data-testid="stSidebar"] * {
+        color: #F3F3F5 !important;
+    }
+    
+    [data-testid="stSidebar"] hr {
+        border-top: 1px solid rgba(79,70,229,0.13) !important;
+    }
+
+    [data-testid="stSidebar"] .stButton > button {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(79,70,229,0.3);
+        color: #F3F3F5 !important;
+        border-radius: 4px;
+        font-weight: 500;
+        font-family: 'Roboto Mono', monospace;
+        letter-spacing: 0.5px;
+        transition: all 0.3s ease;
+    }
+    
+    [data-testid="stSidebar"] .stButton > button:hover {
+        border-color: #4F46E5;
+        box-shadow: 0 0 20px rgba(79,70,229,0.4);
+        background: transparent;
+    }
+
+    /* Card-like containers focus */
     .block-container {
-        padding-top: 1.5rem;
+        padding-top: 2rem;
+        max-width: 1200px;
+    }
+    
+    /* Global Buttons */
+    .stButton > button {
+        font-family: 'Roboto Mono', monospace;
+        letter-spacing: 0.5px;
+        border-radius: 4px !important;
+        transition: all 0.3s ease !important;
     }
 </style>
 """, unsafe_allow_html=True)
