@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>SmartScribe – Account</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Mono:wght@300;400;500&family=Literata:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--ink:#07080a;--amber:#d4820a;--amber2:#f0a832;--amber3:#7a4a06;--paper:#f0ebe0;--muted:#5a5650;--sage:#4a7a41;--rust:#b84b1e;--border:rgba(212,130,10,0.22);--serif:'Playfair Display',Georgia,serif;--mono:'DM Mono',monospace;--body:'Literata',Georgia,serif}
+html,body{height:100%}
+body{background:var(--ink);color:var(--paper);font-family:var(--body);overflow-x:hidden;cursor:none;min-height:100vh}
+#cursor{position:fixed;width:12px;height:12px;background:var(--amber);border-radius:50%;pointer-events:none;z-index:99999;transform:translate(-50%,-50%);transition:width .2s,height .2s;mix-blend-mode:screen}
+#cursor-ring{position:fixed;width:36px;height:36px;border:1px solid rgba(212,130,10,.5);border-radius:50%;pointer-events:none;z-index:99998;transform:translate(-50%,-50%);transition:width .2s,height .2s}
+nav{position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;align-items:center;justify-content:space-between;padding:0 3rem;height:62px;background:rgba(7,8,10,.9);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
+.nav-logo{font-family:var(--serif);font-size:1.2rem;font-weight:700;display:flex;align-items:center;gap:.5rem;text-decoration:none;color:var(--paper)}
+.logo-dot{width:8px;height:8px;background:var(--amber);border-radius:50%;box-shadow:0 0 12px var(--amber);animation:dot-pulse 2s ease-in-out infinite;flex-shrink:0}
+@keyframes dot-pulse{0%,100%{box-shadow:0 0 12px var(--amber)}50%{box-shadow:0 0 28px var(--amber2)}}
+.nav-links{display:flex;gap:2rem;list-style:none}
+.nav-links a{font-family:var(--mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-decoration:none;transition:color .2s}
+.nav-links a:hover,.nav-links a.active{color:var(--amber2)}
+.nav-back{font-family:var(--mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border:1px solid var(--border);padding:.5rem 1.2rem;cursor:none;text-decoration:none;transition:all .2s;display:inline-block}
+.nav-back:hover{color:var(--amber);border-color:var(--amber)}
+
+/* CANVAS BG */
+#bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+
+/* MAIN LAYOUT */
+.account-wrap{position:relative;z-index:1;min-height:100vh;display:flex;align-items:stretch;padding-top:62px}
+
+/* LEFT PANEL - branding */
+.brand-panel{width:42%;background:rgba(212,130,10,.03);border-right:1px solid var(--border);padding:4rem 4rem;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+.brand-panel::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(212,130,10,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(212,130,10,.04) 1px,transparent 1px);background-size:44px 44px}
+.brand-panel::after{content:'';position:absolute;top:-20%;left:-20%;width:500px;height:500px;background:radial-gradient(ellipse,rgba(212,130,10,.06) 0%,transparent 60%);pointer-events:none}
+.brand-content{position:relative;z-index:1}
+.brand-eyebrow{font-family:var(--mono);font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;color:var(--amber);margin-bottom:2rem;opacity:0;animation:fade-up .7s .2s forwards}
+.brand-eyebrow::before{content:'';display:inline-block;width:20px;height:1px;background:var(--amber);margin-right:.5rem;vertical-align:middle}
+.brand-title{font-family:var(--serif);font-size:clamp(2rem,3.5vw,3.2rem);font-weight:900;line-height:1;letter-spacing:-.03em;margin-bottom:1.5rem;opacity:0;animation:fade-up .8s .3s forwards}
+.brand-title em{font-style:italic;color:var(--amber2)}
+.brand-desc{font-size:.95rem;font-weight:300;color:rgba(240,235,224,.55);line-height:1.85;max-width:360px;opacity:0;animation:fade-up .7s .45s forwards}
+.brand-features{margin-top:2.5rem;display:flex;flex-direction:column;gap:.9rem;opacity:0;animation:fade-up .7s .6s forwards}
+.bf-item{display:flex;align-items:center;gap:.8rem}
+.bf-icon{width:28px;height:28px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.75rem;color:var(--amber);background:rgba(212,130,10,.06);flex-shrink:0;clip-path:polygon(0 0,calc(100% - 5px) 0,100% 5px,100% 100%,0 100%)}
+.bf-text{font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;color:rgba(240,235,224,.55)}
+
+/* 3D rotating cube decoration */
+.brand-3d-deco{position:absolute;bottom:3rem;right:2rem;opacity:.4;pointer-events:none}
+.brand-stats{position:relative;z-index:1;display:flex;gap:2.5rem;padding-top:2.5rem;border-top:1px solid var(--border);opacity:0;animation:fade-up .7s .75s forwards}
+.bs-num{font-family:var(--serif);font-size:1.8rem;font-weight:700;color:var(--amber2);line-height:1}
+.bs-lbl{font-family:var(--mono);font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:.2rem}
+
+/* RIGHT PANEL - forms */
+.form-panel{flex:1;display:flex;flex-direction:column;justify-content:center;padding:3rem 4rem;position:relative;z-index:1}
+
+/* Tab switcher */
+.tab-switcher{display:flex;border:1px solid var(--border);width:fit-content;margin-bottom:2.5rem;overflow:hidden}
+.tab-btn{font-family:var(--mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);background:transparent;border:none;padding:.65rem 1.8rem;cursor:none;transition:all .2s;position:relative}
+.tab-btn.active{color:var(--ink);background:var(--amber)}
+.tab-btn:not(.active):hover{color:var(--amber);background:rgba(212,130,10,.06)}
+
+/* Forms */
+.form-container{position:relative}
+.auth-form{display:none;opacity:0;transform:translateY(12px);transition:opacity .4s,transform .4s}
+.auth-form.active{display:block;opacity:1;transform:translateY(0)}
+.form-heading{font-family:var(--serif);font-size:clamp(1.6rem,2.5vw,2.2rem);font-weight:700;margin-bottom:.4rem}
+.form-heading em{font-style:italic;color:var(--amber2)}
+.form-subheading{font-family:var(--mono);font-size:.66rem;letter-spacing:.08em;color:var(--muted);margin-bottom:2rem}
+.f-group{margin-bottom:1.2rem}
+.f-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.f-label{display:block;font-family:var(--mono);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:rgba(240,235,224,.45);margin-bottom:.45rem}
+.f-input{width:100%;background:rgba(240,235,224,.04);border:1px solid rgba(240,235,224,.1);color:var(--paper);font-family:var(--body);font-size:.9rem;padding:.75rem 1rem;outline:none;transition:border-color .2s,background .2s,box-shadow .2s}
+.f-input:focus{border-color:var(--amber);background:rgba(212,130,10,.04);box-shadow:0 0 20px rgba(212,130,10,.1),inset 0 0 10px rgba(212,130,10,.03)}
+.f-input::placeholder{color:rgba(240,235,224,.18)}
+.f-input.error{border-color:var(--rust);box-shadow:0 0 12px rgba(184,75,30,.2)}
+.password-wrap{position:relative}
+.password-wrap .f-input{padding-right:2.8rem}
+.pw-toggle{position:absolute;right:.8rem;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:none;font-family:var(--mono);font-size:.65rem;transition:color .2s}
+.pw-toggle:hover{color:var(--amber)}
+.strength-bar{height:2px;background:rgba(240,235,224,.07);margin-top:.4rem;overflow:hidden;border-radius:2px}
+.strength-fill{height:100%;width:0%;transition:width .4s,background .4s;border-radius:2px}
+.strength-label{font-family:var(--mono);font-size:.58rem;letter-spacing:.08em;color:var(--muted);margin-top:.3rem}
+.form-btn{width:100%;font-family:var(--mono);font-size:.76rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);background:var(--amber);border:none;padding:.9rem;cursor:none;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,0 100%);margin-top:.4rem;position:relative;overflow:hidden;transition:background .2s,box-shadow .2s,transform .2s}
+.form-btn::after{content:'';position:absolute;top:50%;left:-60%;width:40%;height:200%;background:rgba(255,255,255,.15);transform:rotate(20deg) translateY(-50%);transition:left .4s}
+.form-btn:hover{background:var(--amber2);box-shadow:0 0 30px rgba(212,130,10,.4);transform:translateY(-2px)}
+.form-btn:hover::after{left:130%}
+.form-divider{display:flex;align-items:center;gap:1rem;margin:1.4rem 0}
+.form-divider::before,.form-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.form-divider span{font-family:var(--mono);font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.form-link{display:block;text-align:center;font-family:var(--mono);font-size:.64rem;letter-spacing:.07em;color:var(--muted);margin-top:1.1rem;text-decoration:none}
+.form-link a{color:var(--amber);text-decoration:none;transition:color .2s}
+.form-link a:hover{color:var(--amber2)}
+.terms-note{font-family:var(--mono);font-size:.58rem;letter-spacing:.05em;color:rgba(240,235,224,.28);line-height:1.6;margin-top:1.2rem;text-align:center}
+.success-toast{display:none;position:fixed;bottom:2rem;right:2rem;background:rgba(74,122,65,.15);border:1px solid rgba(74,122,65,.3);padding:1rem 1.5rem;font-family:var(--mono);font-size:.7rem;letter-spacing:.08em;color:var(--sage);z-index:999;backdrop-filter:blur(10px);animation:toast-in .4s forwards}
+@keyframes toast-in{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fade-up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.particle{position:fixed;pointer-events:none;z-index:0;border-radius:50%;background:var(--amber);animation:p-drift linear infinite;opacity:0}
+@keyframes p-drift{0%{opacity:0;transform:translateY(100vh)}10%{opacity:.2}90%{opacity:.06}100%{opacity:0;transform:translateY(-80px)}}
+@media(max-width:900px){.account-wrap{flex-direction:column}.brand-panel{width:100%;padding:2rem;min-height:auto}.brand-features{display:none}.brand-stats{gap:1.5rem}.form-panel{padding:2rem}.f-row{grid-template-columns:1fr}}
+@media(max-width:600px){.nav-links{display:none}}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<div id="cursor"></div><div id="cursor-ring"></div>
+<div id="success-toast" class="success-toast">✓ &nbsp;Account created — redirecting…</div>
+
+<nav>
+  <a href="index.html" class="nav-logo"><span class="logo-dot"></span>SmartScribe</a>
+  <ul class="nav-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="evaluate.html">Evaluate</a></li>
+    <li><a href="profile.html">Dashboard</a></li>
+    <li><a href="account.html" class="active">Account</a></li>
+  </ul>
+  <a href="index.html" class="nav-back">← Back to Home</a>
+</nav>
+
+<div class="account-wrap">
+  <!-- LEFT: Branding -->
+  <div class="brand-panel">
+    <div class="brand-content">
+      <div class="brand-eyebrow">AI Writing Platform</div>
+      <h2 class="brand-title">Your writing<br>journey starts<br><em>here.</em></h2>
+      <p class="brand-desc">Join SmartScribe and receive instant, rubric-aligned feedback on every essay you write. Track your progress, hit your academic goals.</p>
+      <div class="brand-features">
+        <div class="bf-item"><div class="bf-icon">✦</div><span class="bf-text">Grammar & mechanics analysis</span></div>
+        <div class="bf-item"><div class="bf-icon">◈</div><span class="bf-text">Coherence & argument scoring</span></div>
+        <div class="bf-item"><div class="bf-icon">▲</div><span class="bf-text">Progress tracking with charts</span></div>
+        <div class="bf-item"><div class="bf-icon">▣</div><span class="bf-text">Rubric-aligned academic grading</span></div>
+        <div class="bf-item"><div class="bf-icon">⬡</div><span class="bf-text">Unlimited submissions, free</span></div>
+      </div>
+    </div>
+    <div class="brand-stats">
+      <div><div class="bs-num">98%</div><div class="bs-lbl">Accuracy</div></div>
+      <div><div class="bs-num">&lt;3s</div><div class="bs-lbl">Analysis</div></div>
+      <div><div class="bs-num">7</div><div class="bs-lbl">Dimensions</div></div>
+    </div>
+    <!-- 3D Canvas for brand panel -->
+    <canvas id="brand-canvas" style="position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.6"></canvas>
+  </div>
+
+  <!-- RIGHT: Forms -->
+  <div class="form-panel">
+    <div class="tab-switcher">
+      <button class="tab-btn active" onclick="switchTab('login')">Sign In</button>
+      <button class="tab-btn" onclick="switchTab('register')">Create Account</button>
+    </div>
+
+    <div class="form-container">
+      <!-- LOGIN FORM -->
+      <div class="auth-form active" id="login-form">
+        <h2 class="form-heading">Welcome <em>back.</em></h2>
+        <p class="form-subheading">Sign in to access your submissions and progress.</p>
+        <div class="f-group">
+          <label class="f-label">Username or Email</label>
+          <input class="f-input" type="text" placeholder="your_username or email@edu.in" id="login-user"/>
+        </div>
+        <div class="f-group">
+          <label class="f-label">Password</label>
+          <div class="password-wrap">
+            <input class="f-input" type="password" placeholder="••••••••••" id="login-pass"/>
+            <button class="pw-toggle" onclick="togglePw('login-pass',this)">show</button>
+          </div>
+        </div>
+        <button class="form-btn" onclick="doLogin()">Sign In →</button>
+        <div class="form-divider"><span>or</span></div>
+        <span class="form-link">Don't have an account? <a href="#" onclick="switchTab('register');return false">Create one free</a></span>
+        <p class="terms-note">Forgot your password? Contact your institution admin.</p>
+      </div>
+
+      <!-- REGISTER FORM -->
+      <div class="auth-form" id="register-form">
+        <h2 class="form-heading">Create your <em>account.</em></h2>
+        <p class="form-subheading">Start tracking your writing improvement today.</p>
+        <div class="f-row">
+          <div class="f-group">
+            <label class="f-label">First Name</label>
+            <input class="f-input" type="text" placeholder="Prateek"/>
+          </div>
+          <div class="f-group">
+            <label class="f-label">Last Name</label>
+            <input class="f-input" type="text" placeholder="Sharma"/>
+          </div>
+        </div>
+        <div class="f-group">
+          <label class="f-label">Username</label>
+          <input class="f-input" type="text" placeholder="choose_a_username" id="reg-user"/>
+        </div>
+        <div class="f-group">
+          <label class="f-label">Email Address</label>
+          <input class="f-input" type="email" placeholder="you@university.edu" id="reg-email"/>
+        </div>
+        <div class="f-group">
+          <label class="f-label">Password</label>
+          <div class="password-wrap">
+            <input class="f-input" type="password" placeholder="min. 8 characters" id="reg-pass" oninput="checkStrength(this)"/>
+            <button class="pw-toggle" onclick="togglePw('reg-pass',this)">show</button>
+          </div>
+          <div class="strength-bar"><div class="strength-fill" id="pw-strength"></div></div>
+          <div class="strength-label" id="pw-label">Enter a password</div>
+        </div>
+        <div class="f-group">
+          <label class="f-label">Confirm Password</label>
+          <div class="password-wrap">
+            <input class="f-input" type="password" placeholder="repeat password" id="reg-confirm"/>
+            <button class="pw-toggle" onclick="togglePw('reg-confirm',this)">show</button>
+          </div>
+        </div>
+        <button class="form-btn" onclick="doRegister()">Create Account →</button>
+        <span class="form-link" style="margin-top:1rem">Already registered? <a href="#" onclick="switchTab('login');return false">Sign in</a></span>
+        <p class="terms-note">By creating an account you agree to the usage terms of this academic platform. All data is stored securely with bcrypt-hashed passwords.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// BG SCENE
+(function(){
+  const canvas=document.getElementById('bg-canvas');
+  const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);
+  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.1,200);
+  camera.position.z=22;
+  scene.add(new THREE.AmbientLight(0xd4820a,.1));
+  scene.add(Object.assign(new THREE.PointLight(0xf0a832,1.5,50),{position:{set:(x,y,z)=>{}}}));
+  const pl=new THREE.PointLight(0xf0a832,1.5,50);pl.position.set(5,8,12);scene.add(pl);
+  const mW=new THREE.MeshBasicMaterial({color:0xd4820a,wireframe:true,transparent:true,opacity:.1});
+  const shapes=[];
+  [[new THREE.IcosahedronGeometry(2.5,1),10,3,-8],[new THREE.OctahedronGeometry(1.8,0),-10,-2,-10],[new THREE.TetrahedronGeometry(1.5,0),4,-5,-6],[new THREE.IcosahedronGeometry(1.2,0),-5,5,-12],[new THREE.OctahedronGeometry(2,0),0,0,-15]].forEach(([geo,x,y,z],i)=>{
+    const m=new THREE.Mesh(geo,mW.clone());m.position.set(x,y,z);scene.add(m);shapes.push({m,sx:.002+i*.001,sy:.003+i*.001,sz:.001,oy:y,t:Math.random()*6})});
+  const pGeo=new THREE.BufferGeometry();const pPos=new Float32Array(200*3);
+  for(let i=0;i<200;i++){pPos[i*3]=(Math.random()-.5)*70;pPos[i*3+1]=(Math.random()-.5)*45;pPos[i*3+2]=(Math.random()-.5)*25-5}
+  pGeo.setAttribute('position',new THREE.BufferAttribute(pPos,3));
+  scene.add(new THREE.Points(pGeo,new THREE.PointsMaterial({color:0xd4820a,size:.07,transparent:true,opacity:.35})));
+  let mx=0,my=0;window.addEventListener('mousemove',e=>{mx=(e.clientX/innerWidth-.5);my=-(e.clientY/innerHeight-.5)});
+  (function animate(){requestAnimationFrame(animate);shapes.forEach(s=>{s.t+=.008;s.m.rotation.x+=s.sx;s.m.rotation.y+=s.sy;s.m.rotation.z+=s.sz;s.m.position.y=s.oy+Math.sin(s.t)*.5});
+  camera.position.x+=(mx*2-camera.position.x)*.025;camera.position.y+=(my*1.5-camera.position.y)*.025;camera.lookAt(0,0,0);renderer.render(scene,camera)})();
+  window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+})();
+
+// BRAND PANEL 3D - floating diamond
+(function(){
+  const canvas=document.getElementById('brand-canvas');
+  const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  function resize(){renderer.setSize(canvas.offsetWidth,canvas.offsetHeight)}resize();
+  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(50,canvas.offsetWidth/canvas.offsetHeight,.1,100);
+  camera.position.set(0,0,12);
+  const pl=new THREE.PointLight(0xf0a832,3,30);pl.position.set(3,3,5);scene.add(pl);
+  scene.add(new THREE.AmbientLight(0xd4820a,.2));
+  const mainGeo=new THREE.OctahedronGeometry(2,0);
+  const mainMat=new THREE.MeshPhongMaterial({color:0x1a1000,emissive:0x7a4a06,emissiveIntensity:.5,transparent:true,opacity:.7,shininess:150,side:THREE.DoubleSide});
+  const mainMesh=new THREE.Mesh(mainGeo,mainMat);scene.add(mainMesh);
+  const wireMat=new THREE.MeshBasicMaterial({color:0xf0a832,wireframe:true,transparent:true,opacity:.4});
+  scene.add(new THREE.Mesh(mainGeo,wireMat));
+  const ring1=new THREE.Mesh(new THREE.TorusGeometry(3,.04,8,60),new THREE.MeshBasicMaterial({color:0xd4820a,transparent:true,opacity:.25}));
+  ring1.rotation.x=Math.PI/3;scene.add(ring1);
+  const ring2=new THREE.Mesh(new THREE.TorusGeometry(3.8,.03,8,60),new THREE.MeshBasicMaterial({color:0xf0a832,transparent:true,opacity:.12}));
+  ring2.rotation.y=Math.PI/4;scene.add(ring2);
+  (function animate(){requestAnimationFrame(animate);mainMesh.rotation.y+=.008;mainMesh.rotation.x+=.003;ring1.rotation.z+=.004;ring2.rotation.x+=.003;renderer.render(scene,camera)})();
+  window.addEventListener('resize',()=>{resize();camera.aspect=canvas.offsetWidth/canvas.offsetHeight;camera.updateProjectionMatrix()});
+})();
+
+// CURSOR
+const cur=document.getElementById('cursor'),ring=document.getElementById('cursor-ring');
+let rx=0,ry=0;
+document.addEventListener('mousemove',e=>{cur.style.left=e.clientX+'px';cur.style.top=e.clientY+'px';rx+=(e.clientX-rx)*.12;ry+=(e.clientY-ry)*.12});
+(function tR(){ring.style.left=rx+'px';ring.style.top=ry+'px';requestAnimationFrame(tR)})();
+document.querySelectorAll('a,button,input,select').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{cur.style.width='18px';cur.style.height='18px';ring.style.width='50px';ring.style.height='50px'});
+  el.addEventListener('mouseleave',()=>{cur.style.width='12px';cur.style.height='12px';ring.style.width='36px';ring.style.height='36px'});
+});
+
+// TAB SWITCH
+function switchTab(tab){
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',['login','register'][i]===tab));
+  document.querySelectorAll('.auth-form').forEach(f=>f.classList.remove('active'));
+  setTimeout(()=>{document.getElementById(tab+'-form').classList.add('active')},50);
+}
+
+// TOGGLE PASSWORD
+function togglePw(id,btn){const el=document.getElementById(id);el.type=el.type==='password'?'text':'password';btn.textContent=el.type==='password'?'show':'hide'}
+
+// STRENGTH CHECK
+function checkStrength(el){
+  const v=el.value;let s=0;
+  if(v.length>=8)s++;if(/[A-Z]/.test(v))s++;if(/[0-9]/.test(v))s++;if(/[^A-Za-z0-9]/.test(v))s++;
+  const fill=document.getElementById('pw-strength');
+  const lbl=document.getElementById('pw-label');
+  const colors=['#b84b1e','#d4820a','#f0a832','#4a7a41'];
+  const labels=['Too weak','Fair','Good','Strong'];
+  fill.style.width=(s*25)+'%';fill.style.background=colors[Math.max(0,s-1)]||colors[0];
+  lbl.textContent=v.length===0?'Enter a password':labels[Math.max(0,s-1)]||labels[0];
+}
+
+// AUTH
+function doLogin(){
+  const u=document.getElementById('login-user').value.trim();
+  const p=document.getElementById('login-pass').value;
+  if(!u||!p){[document.getElementById('login-user'),document.getElementById('login-pass')].forEach(el=>{if(!el.value){el.classList.add('error');setTimeout(()=>el.classList.remove('error'),1500)}});return}
+  window.location.href='profile.html';
+}
+function doRegister(){
+  const u=document.getElementById('reg-user').value.trim();
+  const e=document.getElementById('reg-email').value.trim();
+  const p=document.getElementById('reg-pass').value;
+  const c=document.getElementById('reg-confirm').value;
+  if(!u||!e||!p){return}
+  if(p!==c){document.getElementById('reg-confirm').classList.add('error');setTimeout(()=>document.getElementById('reg-confirm').classList.remove('error'),1500);return}
+  const toast=document.getElementById('success-toast');toast.style.display='block';
+  setTimeout(()=>{window.location.href='profile.html'},1800);
+}
+for(let i=0;i<10;i++){const p=document.createElement('div');p.className='particle';const s=Math.random()*3+1.5;p.style.cssText=`width:${s}px;height:${s}px;left:${Math.random()*100}vw;animation-duration:${Math.random()*20+15}s;animation-delay:${Math.random()*15}s`;document.body.appendChild(p)}
+</script>
+</body>
+</html>
