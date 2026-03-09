@@ -1,12 +1,18 @@
+# Python
 __pycache__/
+*.py[cod]
 *.pyc
-*.pyo
-.env
-*.db
-.streamlit/secrets.toml
 venv/
-.venv/
-*.egg-info/
+.env
+
+# Node
+node_modules/
 dist/
-build/
+.vite/
+
+# Database
+*.db
+
+# OS
 .DS_Store
+Thumbs.db
