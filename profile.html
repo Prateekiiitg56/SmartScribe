@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>SmartScribe – Dashboard & Profile</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Mono:wght@300;400;500&family=Literata:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--ink:#07080a;--amber:#d4820a;--amber2:#f0a832;--amber3:#7a4a06;--paper:#f0ebe0;--muted:#5a5650;--sage:#4a7a41;--rust:#b84b1e;--border:rgba(212,130,10,0.22);--serif:'Playfair Display',Georgia,serif;--mono:'DM Mono',monospace;--body:'Literata',Georgia,serif}
+html{scroll-behavior:smooth}
+body{background:var(--ink);color:var(--paper);font-family:var(--body);overflow-x:hidden;cursor:none}
+#cursor{position:fixed;width:12px;height:12px;background:var(--amber);border-radius:50%;pointer-events:none;z-index:99999;transform:translate(-50%,-50%);transition:width .2s,height .2s;mix-blend-mode:screen}
+#cursor-ring{position:fixed;width:36px;height:36px;border:1px solid rgba(212,130,10,.5);border-radius:50%;pointer-events:none;z-index:99998;transform:translate(-50%,-50%);transition:width .2s,height .2s}
+nav{position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;align-items:center;justify-content:space-between;padding:0 3rem;height:62px;background:rgba(7,8,10,.9);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
+.nav-logo{font-family:var(--serif);font-size:1.2rem;font-weight:700;display:flex;align-items:center;gap:.5rem;text-decoration:none;color:var(--paper)}
+.logo-dot{width:8px;height:8px;background:var(--amber);border-radius:50%;box-shadow:0 0 12px var(--amber);animation:dot-pulse 2s ease-in-out infinite;flex-shrink:0}
+@keyframes dot-pulse{0%,100%{box-shadow:0 0 12px var(--amber)}50%{box-shadow:0 0 28px var(--amber2)}}
+.nav-links{display:flex;gap:2rem;list-style:none}
+.nav-links a{font-family:var(--mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-decoration:none;transition:color .2s}
+.nav-links a:hover,.nav-links a.active{color:var(--amber2)}
+.nav-cta{font-family:var(--mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);background:var(--amber);border:none;padding:.5rem 1.4rem;cursor:none;text-decoration:none;clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,0 100%);transition:background .2s;display:inline-block}
+.nav-cta:hover{background:var(--amber2)}
+#bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.5}
+.page-wrap{position:relative;z-index:1}
+
+/* DASHBOARD LAYOUT */
+.dash-shell{display:grid;grid-template-columns:260px 1fr;min-height:100vh;padding-top:62px}
+
+/* SIDEBAR */
+.sidebar{border-right:1px solid var(--border);background:rgba(7,8,10,.7);position:sticky;top:62px;height:calc(100vh - 62px);display:flex;flex-direction:column;overflow:hidden}
+.sidebar-top{padding:2rem 1.5rem;border-bottom:1px solid var(--border);background:linear-gradient(160deg,rgba(212,130,10,.05),transparent 60%);text-align:center;position:relative}
+.avatar-3d-wrap{width:76px;height:76px;margin:0 auto 1rem;position:relative;animation:avatar-bob 6s ease-in-out infinite}
+@keyframes avatar-bob{0%,100%{transform:translateY(0) rotateY(0)}50%{transform:translateY(-6px) rotateY(8deg)}}
+.avatar-3d-wrap:hover{animation-play-state:paused}
+.av-inner{width:76px;height:76px;border:2px solid var(--amber);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:1.7rem;font-weight:900;color:var(--amber);background:rgba(212,130,10,.07);box-shadow:0 0 24px rgba(212,130,10,.2),inset 0 0 16px rgba(212,130,10,.04)}
+.av-ring1{position:absolute;inset:-5px;border:1px dashed rgba(212,130,10,.3);border-radius:50%;animation:spin-r 8s linear infinite}
+.av-ring2{position:absolute;inset:-11px;border:1px solid rgba(212,130,10,.1);border-radius:50%;animation:spin-r 14s linear infinite reverse}
+@keyframes spin-r{to{transform:rotate(360deg)}}
+.av-name{font-family:var(--serif);font-size:1.05rem;font-weight:700;margin-bottom:.2rem}
+.av-role{font-family:var(--mono);font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--amber3)}
+.sidebar-score{display:flex;align-items:center;justify-content:center;gap:.5rem;margin-top:.8rem}
+.ss-badge{font-family:var(--serif);font-size:1.5rem;font-weight:700;color:var(--amber2)}
+.ss-meta{font-family:var(--mono);font-size:.58rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sidebar-nav{flex:1;overflow-y:auto;padding:.6rem 0}
+.sidebar-nav a{display:flex;align-items:center;gap:.75rem;padding:.7rem 1.5rem;font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(240,235,224,.45);text-decoration:none;transition:all .2s;border-left:2px solid transparent;cursor:none}
+.sidebar-nav a:hover,.sidebar-nav a.active{color:var(--amber2);background:rgba(212,130,10,.05);border-left-color:var(--amber);padding-left:1.8rem}
+.sidebar-nav .nav-icon{font-size:1rem;width:18px;text-align:center}
+.sidebar-footer{padding:1.2rem 1.5rem;border-top:1px solid var(--border)}
+.sign-out-btn{width:100%;font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);background:transparent;border:1px solid rgba(240,235,224,.1);padding:.5rem;cursor:none;transition:all .2s}
+.sign-out-btn:hover{color:var(--rust);border-color:rgba(184,75,30,.4)}
+
+/* MAIN CONTENT */
+.main-content{padding:2.5rem 3rem;display:flex;flex-direction:column;gap:2rem}
+
+/* PAGE TABS */
+.content-tabs{display:flex;gap:0;border-bottom:1px solid var(--border)}
+.ct-btn{font-family:var(--mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);background:transparent;border:none;border-bottom:2px solid transparent;padding:.8rem 1.5rem;cursor:none;transition:all .2s;margin-bottom:-1px}
+.ct-btn:hover{color:var(--amber)}
+.ct-btn.active{color:var(--amber2);border-bottom-color:var(--amber)}
+.tab-pane{display:none}.tab-pane.active{display:block}
+
+/* OVERVIEW GRID */
+.overview-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+.kpi-card{border:1px solid var(--border);padding:1.5rem;background:rgba(240,235,224,.02);transition:all .35s;transform-style:preserve-3d;cursor:none;opacity:0;transform:translateY(20px);transition:opacity .6s,transform .6s,box-shadow .35s}
+.kpi-card.visible{opacity:1;transform:translateY(0)}
+.kpi-card:hover{background:rgba(212,130,10,.05);transform:translateY(-4px) rotateX(-3deg)!important;box-shadow:0 16px 40px rgba(0,0,0,.35),0 0 20px rgba(212,130,10,.1)}
+.kpi-icon{font-size:1.2rem;margin-bottom:.8rem;display:inline-block}
+.kpi-val{font-family:var(--serif);font-size:2rem;font-weight:700;color:var(--amber2);line-height:1}
+.kpi-lbl{font-family:var(--mono);font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:.35rem}
+.kpi-delta{font-family:var(--mono);font-size:.62rem;color:var(--sage);margin-top:.4rem}
+
+/* CHART */
+.chart-card{border:1px solid var(--border);background:rgba(240,235,224,.02);overflow:hidden;transition:all .4s;transform-style:preserve-3d}
+.chart-card:hover{transform:rotateX(-2deg);box-shadow:0 20px 50px rgba(0,0,0,.3),0 0 24px rgba(212,130,10,.08)}
+.card-header{display:flex;align-items:center;justify-content:space-between;padding:1.1rem 1.5rem;border-bottom:1px solid var(--border);background:rgba(212,130,10,.03)}
+.card-title{font-family:var(--mono);font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.card-badge{font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;color:var(--sage)}
+.chart-body{padding:1.5rem;height:200px}
+.chart-svg{width:100%;height:100%;overflow:visible}
+.chart-layout{display:grid;grid-template-columns:2fr 1fr;gap:1.5rem}
+
+/* SUBMISSIONS TABLE */
+.sub-table{border:1px solid var(--border);overflow:hidden}
+.sub-row{display:grid;grid-template-columns:1fr 80px 90px 90px 80px;align-items:center;padding:.9rem 1.5rem;border-bottom:1px solid var(--border);transition:all .2s;cursor:none}
+.sub-row:last-child{border-bottom:none}
+.sub-row.header{background:rgba(212,130,10,.03);grid-template-columns:1fr 80px 90px 90px 80px}
+.sub-row:not(.header):hover{background:rgba(212,130,10,.05);transform:translateX(4px)}
+.th{font-family:var(--mono);font-size:.58rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.sub-title-cell{font-family:var(--body);font-size:.88rem;color:var(--paper)}
+.sub-date{font-family:var(--mono);font-size:.62rem;color:var(--muted)}
+.sub-score-cell{font-family:var(--serif);font-size:1.15rem;font-weight:700;color:var(--amber2);text-align:center}
+.sub-grade{font-family:var(--mono);font-size:.65rem;color:var(--muted);text-align:center}
+.sub-delta{font-family:var(--mono);font-size:.65rem;text-align:center}
+.delta-up{color:var(--sage)}.delta-flat{color:var(--muted)}
+.view-btn{font-family:var(--mono);font-size:.58rem;letter-spacing:.08em;text-transform:uppercase;color:var(--amber3);background:transparent;border:1px solid rgba(212,130,10,.2);padding:.3rem .7rem;cursor:none;transition:all .2s;text-align:center}
+.view-btn:hover{color:var(--amber);border-color:var(--amber)}
+
+/* PROFILE FORM */
+.profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+.pf-card{border:1px solid var(--border);overflow:hidden;transition:all .35s;transform-style:preserve-3d}
+.pf-card:hover{transform:rotateX(-1.5deg) translateZ(4px);box-shadow:0 12px 36px rgba(0,0,0,.25),0 0 16px rgba(212,130,10,.07)}
+.pf-card-hdr{padding:1rem 1.4rem;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);background:rgba(212,130,10,.02)}
+.pf-card-body{padding:1.4rem;display:flex;flex-direction:column;gap:1.1rem}
+.pf-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.pf-full{grid-column:1/-1}
+.f-group{display:flex;flex-direction:column;gap:.4rem}
+.f-label{font-family:var(--mono);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:rgba(240,235,224,.4)}
+.f-input{background:rgba(240,235,224,.04);border:1px solid rgba(240,235,224,.1);color:var(--paper);font-family:var(--body);font-size:.9rem;padding:.72rem 1rem;outline:none;transition:border-color .2s,background .2s,box-shadow .2s}
+.f-input:focus{border-color:var(--amber);background:rgba(212,130,10,.04);box-shadow:0 0 20px rgba(212,130,10,.1)}
+.f-input::placeholder{color:rgba(240,235,224,.18)}
+.pf-card-foot{padding:.9rem 1.4rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:.8rem}
+.btn-s{font-family:var(--mono);font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);background:var(--amber);border:none;padding:.48rem 1.2rem;cursor:none;clip-path:polygon(0 0,calc(100% - 6px) 0,100% 6px,100% 100%,0 100%);transition:all .2s}
+.btn-s:hover{background:var(--amber2);transform:translateY(-2px)}
+.btn-sg{font-family:var(--mono);font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:transparent;border:1px solid rgba(240,235,224,.1);padding:.48rem 1.2rem;cursor:none;transition:all .2s}
+.btn-sg:hover{color:var(--paper);border-color:rgba(240,235,224,.3)}
+.pf-card.span2{grid-column:1/-1}
+
+/* RADAR CHART (CSS) */
+.radar-wrap{padding:1.5rem;display:flex;align-items:center;justify-content:center}
+.radar-svg{filter:drop-shadow(0 0 12px rgba(212,130,10,.2))}
+
+.particle{position:fixed;pointer-events:none;z-index:0;border-radius:50%;background:var(--amber);animation:p-drift linear infinite;opacity:0}
+@keyframes p-drift{0%{opacity:0;transform:translateY(100vh)}10%{opacity:.2}90%{opacity:.06}100%{opacity:0;transform:translateY(-80px)}}
+footer{border-top:1px solid var(--border);padding:2rem 3rem;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1}
+.foot-logo{font-family:var(--serif);font-size:1.05rem;font-weight:700;display:flex;align-items:center;gap:.5rem}
+.foot-copy{font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;color:var(--muted)}
+.foot-links{display:flex;gap:1.5rem;list-style:none}
+.foot-links a{font-family:var(--mono);font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-decoration:none;transition:color .2s}
+.foot-links a:hover{color:var(--amber)}
+@media(max-width:1100px){.overview-grid{grid-template-columns:1fr 1fr}.chart-layout{grid-template-columns:1fr}.profile-grid{grid-template-columns:1fr}}
+@media(max-width:800px){.dash-shell{grid-template-columns:1fr}.sidebar{position:static;height:auto;flex-direction:row;flex-wrap:wrap}.main-content{padding:1.5rem}.sub-row{grid-template-columns:1fr 60px 70px}}
+@media(max-width:600px){.nav-links{display:none}.overview-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<div id="cursor"></div><div id="cursor-ring"></div>
+
+<div class="page-wrap">
+<nav>
+  <a href="index.html" class="nav-logo"><span class="logo-dot"></span>SmartScribe</a>
+  <ul class="nav-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="evaluate.html">Evaluate</a></li>
+    <li><a href="profile.html" class="active">Dashboard</a></li>
+    <li><a href="account.html">Account</a></li>
+  </ul>
+  <a href="evaluate.html" class="nav-cta">New Essay</a>
+</nav>
+
+<div class="dash-shell">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="avatar-3d-wrap">
+        <div class="av-inner">P</div>
+        <div class="av-ring1"></div>
+        <div class="av-ring2"></div>
+      </div>
+      <div class="av-name">Prateek Sharma</div>
+      <div class="av-role">Student · Sem 6 CE</div>
+      <div class="sidebar-score">
+        <div class="ss-badge">77</div>
+        <div>
+          <div class="ss-meta">Latest Score</div>
+          <div style="font-family:var(--mono);font-size:.58rem;color:var(--sage)">↑ +14 overall</div>
+        </div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="#" class="active" onclick="showTab('overview',this)"><span class="nav-icon">◈</span>Overview</a>
+      <a href="#" onclick="showTab('submissions',this)"><span class="nav-icon">▣</span>Submissions</a>
+      <a href="#" onclick="showTab('progress',this)"><span class="nav-icon">▲</span>Progress Charts</a>
+      <a href="#" onclick="showTab('profile',this)"><span class="nav-icon">◇</span>Edit Profile</a>
+      <a href="#" onclick="showTab('security',this)"><span class="nav-icon">⬢</span>Security</a>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="sign-out-btn" onclick="window.location.href='account.html'">↩ Sign Out</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main-content">
+
+    <!-- OVERVIEW TAB -->
+    <div class="tab-pane active" id="tab-overview">
+      <div style="margin-bottom:1.8rem;opacity:0;animation:fade-up .7s .1s forwards">
+        <div style="font-family:var(--mono);font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;color:var(--amber);margin-bottom:.5rem">§ Dashboard</div>
+        <h1 style="font-family:var(--serif);font-size:2.2rem;font-weight:700;line-height:1.1">Welcome back, <em style="font-style:italic;color:var(--amber2)">Prateek.</em></h1>
+        <p style="font-size:.92rem;font-weight:300;color:rgba(240,235,224,.55);margin-top:.5rem">You've improved 14 points since your first submission.</p>
+      </div>
+
+      <div class="overview-grid">
+        <div class="kpi-card"><div class="kpi-icon">📝</div><div class="kpi-val">12</div><div class="kpi-lbl">Total Essays</div><div class="kpi-delta">↑ 3 this month</div></div>
+        <div class="kpi-card"><div class="kpi-icon">✦</div><div class="kpi-val">77</div><div class="kpi-lbl">Latest Score</div><div class="kpi-delta">↑ +6 from last</div></div>
+        <div class="kpi-card"><div class="kpi-icon">◈</div><div class="kpi-val">71</div><div class="kpi-lbl">Average Score</div><div class="kpi-delta">↑ trend positive</div></div>
+        <div class="kpi-card"><div class="kpi-icon">▲</div><div class="kpi-val">+14</div><div class="kpi-lbl">Total Growth</div><div class="kpi-delta">63 → 77</div></div>
+      </div>
+
+      <div class="chart-layout">
+        <div class="chart-card">
+          <div class="card-header">
+            <span class="card-title">Score Trend — All Submissions</span>
+            <span class="card-badge">↑ Improving</span>
+          </div>
+          <div class="chart-body">
+            <svg class="chart-svg" viewBox="0 0 600 160" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#d4820a" stop-opacity=".2"/>
+                  <stop offset="100%" stop-color="#d4820a" stop-opacity="0"/>
+                </linearGradient>
+                <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              </defs>
+              <line x1="0" y1="32" x2="600" y2="32" stroke="rgba(240,235,224,.05)" stroke-width="1"/>
+              <line x1="0" y1="64" x2="600" y2="64" stroke="rgba(240,235,224,.05)" stroke-width="1"/>
+              <line x1="0" y1="96" x2="600" y2="96" stroke="rgba(240,235,224,.05)" stroke-width="1"/>
+              <line x1="0" y1="128" x2="600" y2="128" stroke="rgba(240,235,224,.05)" stroke-width="1"/>
+              <path d="M 0 126 L 75 118 L 150 110 L 225 105 L 300 92 L 375 80 L 450 66 L 525 55 L 600 42 L 600 160 L 0 160 Z" fill="url(#cg)"/>
+              <polyline points="0,126 75,118 150,110 225,105 300,92 375,80 450,66 525,55 600,42"
+                fill="none" stroke="#d4820a" stroke-width="2.5" stroke-linejoin="round" filter="url(#glow)"
+                stroke-dasharray="1000" stroke-dashoffset="1000">
+                <animate attributeName="stroke-dashoffset" from="1000" to="0" dur="2s" fill="freeze" begin="0.3s"/>
+              </polyline>
+              <circle cx="75" cy="118" r="3.5" fill="#d4820a"/>
+              <circle cx="150" cy="110" r="3.5" fill="#d4820a"/>
+              <circle cx="225" cy="105" r="3.5" fill="#d4820a"/>
+              <circle cx="300" cy="92" r="3.5" fill="#d4820a"/>
+              <circle cx="375" cy="80" r="3.5" fill="#d4820a"/>
+              <circle cx="450" cy="66" r="3.5" fill="#d4820a"/>
+              <circle cx="525" cy="55" r="3.5" fill="#d4820a"/>
+              <circle cx="600" cy="42" r="5" fill="#f0a832" stroke="#07080a" stroke-width="2"/>
+              <text x="0" y="155" font-family="'DM Mono'" font-size="8" fill="rgba(240,235,224,.25)" text-anchor="middle">Aug</text>
+              <text x="75" y="155" font-family="'DM Mono'" font-size="8" fill="rgba(240,235,224,.25)" text-anchor="middle">Sep</text>
+              <text x="150" y="155" font-family="'DM Mono'" font-size="8" fill="rgba(240,235,224,.25)" text-anchor="middle">Oct</text>
+              <text x="225" y="155" font-family="'DM Mono'" font-size="8" fill="rgba(240,235,224,.25)" text-anchor="middle">Nov</text>
+              <text x="300" y="155" font-family="'DM Mono'" font-size="8" fill="rgba(240,235,224,.25)" text-anchor="middle">Dec</text>
+              <text x="375" y="155" font-family="'DM Mono'" font-size="8" fill="rgba(240,235,224,.25)" text-anchor="middle">Jan</text>
+              <text x="450" y="155" font-family="'DM Mono'" font-size="8" fill="rgba(240,235,224,.25)" text-anchor="middle">Feb</text>
+              <text x="525" y="155" font-family="'DM Mono'" font-size="8" fill="rgba(240,235,224,.25)" text-anchor="middle">Jun</text>
+              <text x="600" y="155" font-family="'DM Mono'" font-size="8" fill="rgba(240,235,224,.25)" text-anchor="middle">Jul</text>
+            </svg>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="card-header"><span class="card-title">Dimension Radar</span></div>
+          <div class="radar-wrap">
+            <svg class="radar-svg" viewBox="0 0 200 200" width="180" height="180">
+              <defs>
+                <linearGradient id="radarFill" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#d4820a" stop-opacity=".3"/>
+                  <stop offset="100%" stop-color="#f0a832" stop-opacity=".15"/>
+                </linearGradient>
+              </defs>
+              <!-- Grid -->
+              <polygon points="100,20 157,55 157,125 100,160 43,125 43,55" fill="none" stroke="rgba(240,235,224,.06)" stroke-width="1"/>
+              <polygon points="100,40 143,65 143,115 100,140 57,115 57,65" fill="none" stroke="rgba(240,235,224,.06)" stroke-width="1"/>
+              <polygon points="100,60 129,75 129,105 100,120 71,105 71,75" fill="none" stroke="rgba(240,235,224,.06)" stroke-width="1"/>
+              <line x1="100" y1="20" x2="100" y2="160" stroke="rgba(240,235,224,.04)" stroke-width="1"/>
+              <line x1="43" y1="55" x2="157" y2="125" stroke="rgba(240,235,224,.04)" stroke-width="1"/>
+              <line x1="157" y1="55" x2="43" y2="125" stroke="rgba(240,235,224,.04)" stroke-width="1"/>
+              <!-- Data polygon: Grammar82 Coherence78 Argument71 Vocab88 Structure75 Clarity80 -->
+              <polygon points="100,28 151,60 148,114 100,145 52,111 55,61" fill="url(#radarFill)" stroke="#d4820a" stroke-width="1.5" stroke-linejoin="round" opacity="0">
+                <animate attributeName="opacity" from="0" to="1" dur="1s" fill="freeze" begin="0.5s"/>
+              </polygon>
+              <!-- Labels -->
+              <text x="100" y="14" font-family="'DM Mono'" font-size="8" fill="rgba(240,235,224,.5)" text-anchor="middle">Grammar</text>
+              <text x="166" y="52" font-family="'DM Mono'" font-size="8" fill="rgba(240,235,224,.5)" text-anchor="start">Coherence</text>
+              <text x="166" y="130" font-family="'DM Mono'" font-size="8" fill="rgba(240,235,224,.5)" text-anchor="start">Argument</text>
+              <text x="100" y="174" font-family="'DM Mono'" font-size="8" fill="rgba(240,235,224,.5)" text-anchor="middle">Vocab</text>
+              <text x="34" y="130" font-family="'DM Mono'" font-size="8" fill="rgba(240,235,224,.5)" text-anchor="end">Structure</text>
+              <text x="34" y="52" font-family="'DM Mono'" font-size="8" fill="rgba(240,235,224,.5)" text-anchor="end">Clarity</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SUBMISSIONS TAB -->
+    <div class="tab-pane" id="tab-submissions">
+      <div style="margin-bottom:1.8rem">
+        <div style="font-family:var(--mono);font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;color:var(--amber);margin-bottom:.5rem">§ History</div>
+        <h1 style="font-family:var(--serif);font-size:2rem;font-weight:700">Submission <em style="font-style:italic;color:var(--amber2)">History</em></h1>
+      </div>
+      <div class="sub-table">
+        <div class="sub-row header">
+          <span class="th">Essay Title</span>
+          <span class="th" style="text-align:center">Score</span>
+          <span class="th" style="text-align:center">Grade</span>
+          <span class="th" style="text-align:center">Change</span>
+          <span class="th"></span>
+        </div>
+        <div class="sub-row"><div><div class="sub-title-cell">Climate Change & Policy</div><div class="sub-date">Jul 14, 2025 · 842 words</div></div><div class="sub-score-cell">77</div><div class="sub-grade">B+</div><div class="sub-delta delta-up">↑ +6</div><button class="view-btn">View →</button></div>
+        <div class="sub-row"><div><div class="sub-title-cell">Socioeconomic Inequality</div><div class="sub-date">Jun 22, 2025 · 1,102 words</div></div><div class="sub-score-cell">71</div><div class="sub-grade">B−</div><div class="sub-delta delta-up">↑ +3</div><button class="view-btn">View →</button></div>
+        <div class="sub-row"><div><div class="sub-title-cell">Ethics of AI in Healthcare</div><div class="sub-date">May 30, 2025 · 760 words</div></div><div class="sub-score-cell">68</div><div class="sub-grade">C+</div><div class="sub-delta delta-up">↑ +5</div><button class="view-btn">View →</button></div>
+        <div class="sub-row"><div><div class="sub-title-cell">Urbanisation & Mental Health</div><div class="sub-date">Apr 10, 2025 · 988 words</div></div><div class="sub-score-cell">63</div><div class="sub-grade">C</div><div class="sub-delta delta-flat">baseline</div><button class="view-btn">View →</button></div>
+        <div class="sub-row"><div><div class="sub-title-cell">Digital Privacy Rights</div><div class="sub-date">Mar 5, 2025 · 734 words</div></div><div class="sub-score-cell">65</div><div class="sub-grade">C+</div><div class="sub-delta delta-up">↑ +2</div><button class="view-btn">View →</button></div>
+      </div>
+    </div>
+
+    <!-- PROGRESS TAB -->
+    <div class="tab-pane" id="tab-progress">
+      <div style="margin-bottom:1.8rem">
+        <div style="font-family:var(--mono);font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;color:var(--amber);margin-bottom:.5rem">§ Analytics</div>
+        <h1 style="font-family:var(--serif);font-size:2rem;font-weight:700">Progress <em style="font-style:italic;color:var(--amber2)">Charts</em></h1>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+        <div class="chart-card">
+          <div class="card-header"><span class="card-title">Grammar Score Over Time</span><span class="card-badge">↑ +18 pts</span></div>
+          <div class="chart-body">
+            <svg class="chart-svg" viewBox="0 0 400 140" preserveAspectRatio="none">
+              <defs><linearGradient id="gg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#d4820a" stop-opacity=".2"/><stop offset="100%" stop-color="#d4820a" stop-opacity="0"/></linearGradient></defs>
+              <path d="M 0 118 L 66 110 L 132 102 L 200 90 L 266 74 L 332 58 L 400 44 L 400 140 L 0 140 Z" fill="url(#gg)"/>
+              <polyline points="0,118 66,110 132,102 200,90 266,74 332,58 400,44" fill="none" stroke="#d4820a" stroke-width="2" stroke-linejoin="round" stroke-dasharray="800" stroke-dashoffset="800"><animate attributeName="stroke-dashoffset" from="800" to="0" dur="1.5s" fill="freeze" begin="0.2s"/></polyline>
+              <circle cx="66" cy="110" r="3" fill="#d4820a"/><circle cx="132" cy="102" r="3" fill="#d4820a"/><circle cx="200" cy="90" r="3" fill="#d4820a"/><circle cx="266" cy="74" r="3" fill="#d4820a"/><circle cx="332" cy="58" r="3" fill="#d4820a"/><circle cx="400" cy="44" r="4" fill="#f0a832" stroke="#07080a" stroke-width="2"/>
+            </svg>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="card-header"><span class="card-title">Argument Strength Over Time</span><span class="card-badge">↑ +15 pts</span></div>
+          <div class="chart-body">
+            <svg class="chart-svg" viewBox="0 0 400 140" preserveAspectRatio="none">
+              <path d="M 0 122 L 66 115 L 132 108 L 200 96 L 266 82 L 332 64 L 400 50 L 400 140 L 0 140 Z" fill="url(#gg)"/>
+              <polyline points="0,122 66,115 132,108 200,96 266,82 332,64 400,50" fill="none" stroke="#f0a832" stroke-width="2" stroke-linejoin="round" stroke-dasharray="800" stroke-dashoffset="800"><animate attributeName="stroke-dashoffset" from="800" to="0" dur="1.5s" fill="freeze" begin="0.4s"/></polyline>
+              <circle cx="66" cy="115" r="3" fill="#f0a832"/><circle cx="132" cy="108" r="3" fill="#f0a832"/><circle cx="200" cy="96" r="3" fill="#f0a832"/><circle cx="266" cy="82" r="3" fill="#f0a832"/><circle cx="332" cy="64" r="3" fill="#f0a832"/><circle cx="400" cy="50" r="4" fill="#f0a832" stroke="#07080a" stroke-width="2"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROFILE TAB -->
+    <div class="tab-pane" id="tab-profile">
+      <div style="margin-bottom:1.8rem">
+        <div style="font-family:var(--mono);font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;color:var(--amber);margin-bottom:.5rem">§ Settings</div>
+        <h1 style="font-family:var(--serif);font-size:2rem;font-weight:700">Edit <em style="font-style:italic;color:var(--amber2)">Profile</em></h1>
+      </div>
+      <div class="profile-grid">
+        <div class="pf-card span2">
+          <div class="pf-card-hdr">Personal Information</div>
+          <div class="pf-card-body">
+            <div class="pf-row">
+              <div class="f-group"><label class="f-label">First Name</label><input class="f-input" type="text" value="Prateek"/></div>
+              <div class="f-group"><label class="f-label">Last Name</label><input class="f-input" type="text" value="Sharma"/></div>
+            </div>
+            <div class="pf-row">
+              <div class="f-group"><label class="f-label">Username</label><input class="f-input" type="text" value="prateekiiitg56"/></div>
+              <div class="f-group"><label class="f-label">Email</label><input class="f-input" type="email" value="prateek@iiitg.ac.in"/></div>
+            </div>
+            <div class="f-group pf-full"><label class="f-label">Institution</label><input class="f-input" type="text" value="IIIT Guwahati — Computer Engineering"/></div>
+          </div>
+          <div class="pf-card-foot"><button class="btn-sg">Discard</button><button class="btn-s">Save Changes</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECURITY TAB -->
+    <div class="tab-pane" id="tab-security">
+      <div style="margin-bottom:1.8rem">
+        <div style="font-family:var(--mono);font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;color:var(--amber);margin-bottom:.5rem">§ Security</div>
+        <h1 style="font-family:var(--serif);font-size:2rem;font-weight:700">Change <em style="font-style:italic;color:var(--amber2)">Password</em></h1>
+      </div>
+      <div class="profile-grid">
+        <div class="pf-card">
+          <div class="pf-card-hdr">Password Update</div>
+          <div class="pf-card-body">
+            <div class="f-group"><label class="f-label">Current Password</label><input class="f-input" type="password" placeholder="••••••••••"/></div>
+            <div class="f-group"><label class="f-label">New Password</label><input class="f-input" type="password" placeholder="min. 8 characters"/></div>
+            <div class="f-group"><label class="f-label">Confirm New Password</label><input class="f-input" type="password" placeholder="repeat new password"/></div>
+          </div>
+          <div class="pf-card-foot"><button class="btn-s">Update Password</button></div>
+        </div>
+        <div class="pf-card">
+          <div class="pf-card-hdr">Session Info</div>
+          <div class="pf-card-body" style="gap:.7rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:.7rem;background:rgba(240,235,224,.02);border:1px solid var(--border)">
+              <div>
+                <div style="font-family:var(--mono);font-size:.64rem;letter-spacing:.06em;color:var(--paper)">Current Session</div>
+                <div style="font-family:var(--mono);font-size:.58rem;color:var(--muted);margin-top:.2rem">Chrome · Bhagalpur, IN</div>
+              </div>
+              <span style="font-family:var(--mono);font-size:.58rem;color:var(--sage)">● Active</span>
+            </div>
+            <div style="font-family:var(--mono);font-size:.62rem;color:var(--muted);line-height:1.7;padding:.5rem">Passwords are stored using bcrypt hashing. Session is maintained via Streamlit session_state.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<footer>
+  <div class="foot-logo"><span class="logo-dot"></span>SmartScribe</div>
+  <p class="foot-copy">Computer Engineering Lab · Semester 6 · 2025</p>
+  <ul class="foot-links"><li><a href="index.html">Home</a></li><li><a href="evaluate.html">Evaluate</a></li><li><a href="#">GitHub</a></li></ul>
+</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// BG SCENE
+(function(){
+  const canvas=document.getElementById('bg-canvas');
+  const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);
+  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.1,200);
+  camera.position.z=24;
+  const mW=new THREE.MeshBasicMaterial({color:0xd4820a,wireframe:true,transparent:true,opacity:.07});
+  [[new THREE.IcosahedronGeometry(3,1),14,4,-10],[new THREE.OctahedronGeometry(2,0),-14,-3,-12],[new THREE.TetrahedronGeometry(2,0),5,-7,-8]].forEach(([geo,x,y,z],i)=>{
+    const m=new THREE.Mesh(geo,mW.clone());m.position.set(x,y,z);scene.add(m);
+    (function rot(){requestAnimationFrame(rot);m.rotation.x+=.002+i*.001;m.rotation.y+=.003+i*.001})()});
+  const pGeo=new THREE.BufferGeometry();const pPos=new Float32Array(160*3);
+  for(let i=0;i<160;i++){pPos[i*3]=(Math.random()-.5)*70;pPos[i*3+1]=(Math.random()-.5)*50;pPos[i*3+2]=(Math.random()-.5)*20-5}
+  pGeo.setAttribute('position',new THREE.BufferAttribute(pPos,3));
+  scene.add(new THREE.Points(pGeo,new THREE.PointsMaterial({color:0xd4820a,size:.07,transparent:true,opacity:.25})));
+  let mx=0,my=0;window.addEventListener('mousemove',e=>{mx=(e.clientX/innerWidth-.5);my=-(e.clientY/innerHeight-.5)});
+  (function animate(){requestAnimationFrame(animate);camera.position.x+=(mx-camera.position.x)*.02;camera.position.y+=(my-camera.position.y)*.02;camera.lookAt(0,0,0);renderer.render(scene,camera)})();
+  window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+})();
+
+// CURSOR
+const cur=document.getElementById('cursor'),ring=document.getElementById('cursor-ring');
+let rx=0,ry=0;
+document.addEventListener('mousemove',e=>{cur.style.left=e.clientX+'px';cur.style.top=e.clientY+'px';rx+=(e.clientX-rx)*.12;ry+=(e.clientY-ry)*.12});
+(function tR(){ring.style.left=rx+'px';ring.style.top=ry+'px';requestAnimationFrame(tR)})();
+document.querySelectorAll('a,button,input,.kpi-card,.sub-row,.pf-card').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{cur.style.width='18px';cur.style.height='18px';ring.style.width='50px';ring.style.height='50px'});
+  el.addEventListener('mouseleave',()=>{cur.style.width='12px';cur.style.height='12px';ring.style.width='36px';ring.style.height='36px'});
+});
+
+// TABS
+const tabMap={overview:'tab-overview',submissions:'tab-submissions',progress:'tab-progress',profile:'tab-profile',security:'tab-security'};
+function showTab(name,link){
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-nav a').forEach(a=>a.classList.remove('active'));
+  document.getElementById(tabMap[name]).classList.add('active');
+  if(link)link.classList.add('active');
+  return false;
+}
+
+// SCROLL REVEAL
+const obs=new IntersectionObserver(entries=>entries.forEach((e,i)=>{if(e.isIntersecting)setTimeout(()=>e.target.classList.add('visible'),i*100)}),{threshold:.1});
+document.querySelectorAll('.kpi-card').forEach(el=>obs.observe(el));
+
+@keyframes fade-up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
+for(let i=0;i<10;i++){const p=document.createElement('div');p.className='particle';const s=Math.random()*3+1.5;p.style.cssText=`width:${s}px;height:${s}px;left:${Math.random()*100}vw;animation-duration:${Math.random()*20+15}s;animation-delay:${Math.random()*15}s`;document.body.appendChild(p)}
+</script>
+<style>@keyframes fade-up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}</style>
+</body>
+</html>
