@@ -6,7 +6,13 @@ Handles registration, login, logout, session helpers, and password hashing.
 import streamlit as st
 import bcrypt
 import re
-from database.db import create_user, get_user_by_username, get_user_by_email
+import urllib.parse
+import urllib.request
+import json
+import base64
+import uuid
+import time
+from database.db import create_user, get_user_by_username, get_user_by_email, get_user_by_id
 
 
 # ─── Password helpers ───────────────────────────────────────────────────────────
@@ -27,6 +33,103 @@ def _valid_username(username: str) -> bool:
     return bool(re.match(r"^[a-zA-Z0-9_]{3,20}$", username))
 
 
+def _valid_password(password: str) -> bool:
+    """Check if password meets minimum security requirements: 8+ chars, uppercase, lowercase, digit, special char."""
+    if len(password) < 8: return False
+    if not re.search(r"[A-Z]", password): return False
+    if not re.search(r"[a-z]", password): return False
+    if not re.search(r"\d", password): return False
+    if not re.search(r"[\W_]", password): return False
+    return True
+
+
+# ─── Google OAuth Helpers ────────────────────────────────────────────────────────
+def get_google_auth_url() -> str:
+    client_id = st.secrets.get("GOOGLE_CLIENT_ID", "")
+    redirect_uri = st.secrets.get("GOOGLE_REDIRECT_URI", "http://localhost:8501")
+    if not client_id:
+        return "#"
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "online",
+        "prompt": "select_account"
+    }
+    return "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
+
+
+def handle_google_oauth():
+    """Check for Google OAuth code in URL and handle login/registration."""
+    if "code" in st.query_params:
+        code = st.query_params["code"]
+        st.query_params.clear()
+        
+        client_id = st.secrets.get("GOOGLE_CLIENT_ID", "")
+        client_secret = st.secrets.get("GOOGLE_CLIENT_SECRET", "")
+        redirect_uri = st.secrets.get("GOOGLE_REDIRECT_URI", "http://localhost:8501")
+        
+        if not client_id or not client_secret:
+            st.error("Google OAuth is not properly configured. Missing secrets.")
+            return
+        
+        token_url = "https://oauth2.googleapis.com/token"
+        data = urllib.parse.urlencode({
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code"
+        }).encode("utf-8")
+        
+        req = urllib.request.Request(token_url, data=data)
+        try:
+            with urllib.request.urlopen(req) as response:
+                res_data = json.loads(response.read().decode())
+                id_token = res_data.get("id_token")
+                if not id_token:
+                    st.error("Google authentication failed. No ID token received.")
+                    return
+                
+                parts = id_token.split(".")
+                if len(parts) != 3:
+                    st.error("Invalid ID token received.")
+                    return
+                
+                payload = parts[1]
+                payload += "=" * ((4 - len(payload) % 4) % 4)
+                decoded = base64.urlsafe_b64decode(payload).decode("utf-8")
+                user_info = json.loads(decoded)
+                
+                email = user_info.get("email")
+                full_name = user_info.get("name", "Google User")
+                
+                if not email:
+                    st.error("Google didn't return an email address.")
+                    return
+                
+                user = get_user_by_email(email)
+                if not user:
+                    # Register the Google user
+                    username = "g_" + uuid.uuid4().hex[:12]
+                    random_pw = uuid.uuid4().hex + "A1!"
+                    hashed = hash_password(random_pw)
+                    uid = create_user(username, email, hashed, full_name)
+                    user = get_user_by_id(uid)
+                    
+                st.session_state["authenticated"] = True
+                st.session_state["user_id"] = user["id"]
+                st.session_state["username"] = user["username"]
+                st.session_state["full_name"] = user["full_name"]
+                st.session_state["current_page"] = "home"
+                st.toast(f"Signed in via Google successfully!", icon="🌐")
+                st.rerun()
+                
+        except Exception as e:
+            st.error(f"Failed to authenticate with Google.")
+
+
 # ─── Session helpers ─────────────────────────────────────────────────────────────
 def init_session():
     """Ensure all auth keys exist in session_state."""
@@ -40,6 +143,8 @@ def init_session():
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
+            
+    handle_google_oauth()
 
 
 def is_logged_in() -> bool:
@@ -103,15 +208,18 @@ def render_login_page():
 
             if submitted:
                 if not username or not password:
+                    time.sleep(1) # secure delay
                     st.error("Please fill in all fields.")
                     return
 
                 user = get_user_by_username(username.strip())
                 if user is None:
+                    time.sleep(1) # secure delay
                     st.error("Invalid username or password.")
                     return
 
                 if not verify_password(password, user["password"]):
+                    time.sleep(1) # secure delay
                     st.error("Invalid username or password.")
                     return
 
@@ -123,6 +231,10 @@ def render_login_page():
                 st.session_state["current_page"] = "home"
                 st.success(f"Welcome back, {user['full_name'] or user['username']}!")
                 st.rerun()
+
+        st.markdown('<p class="auth-divider">Or continue with</p>', unsafe_allow_html=True)
+        g_url = get_google_auth_url()
+        st.markdown(f'<a href="{g_url}" target="_self" style="display:block; text-align:center; padding:8px; border-radius:4px; border: 1px solid rgba(79,70,229,0.3); color:#F3F3F5; text-decoration:none; font-family:\'Roboto Mono\', monospace; margin-bottom: 2rem;">🌐 Sign in with Google</a>', unsafe_allow_html=True)
 
         st.markdown('<p class="auth-divider">Don\'t have an account?</p>', unsafe_allow_html=True)
         if st.button("📝  Create Account", use_container_width=True, key="login_goto_register"):
@@ -185,8 +297,8 @@ def render_register_page():
                 if not _valid_email(email.strip()):
                     st.error("Please enter a valid email address.")
                     return
-                if len(password) < 6:
-                    st.error("Password must be at least 6 characters.")
+                if not _valid_password(password):
+                    st.error("Password must be at least 8 chars and include an uppercase, lowercase, digit, and special character.")
                     return
                 if password != confirm:
                     st.error("Passwords do not match.")
@@ -209,6 +321,10 @@ def render_register_page():
                 st.session_state["current_page"] = "home"
                 st.success("Account created successfully! 🎉")
                 st.rerun()
+
+        st.markdown('<p class="auth-divider" style="margin-top: 1.5rem;">Or continue with</p>', unsafe_allow_html=True)
+        g_url = get_google_auth_url()
+        st.markdown(f'<a href="{g_url}" target="_self" style="display:block; text-align:center; padding:8px; border-radius:4px; border: 1px solid rgba(79,70,229,0.3); color:#F3F3F5; text-decoration:none; font-family:\'Roboto Mono\', monospace; margin-bottom: 2rem;">🌐 Sign in with Google</a>', unsafe_allow_html=True)
 
         st.markdown('<p style="text-align:center;color:#94a3b8;font-size:0.85rem;margin:1rem 0;">Already have an account?</p>', unsafe_allow_html=True)
         if st.button("🔑  Sign In Instead", use_container_width=True, key="register_goto_login"):

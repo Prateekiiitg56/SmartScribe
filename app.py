@@ -8,6 +8,7 @@ from database.db import init_db
 from auth.auth import init_session, is_logged_in, logout, render_login_page, render_register_page
 from views.home import render_home_page
 from views.profile import render_profile_page
+from views.evaluate import render_evaluate_page
 
 # ─── Page configuration ─────────────────────────────────────────────────────────
 st.set_page_config(
@@ -157,34 +158,7 @@ elif page == "profile":
     render_profile_page()
 
 elif page == "evaluate":
-    # Placeholder for future essay evaluation page
-    st.markdown("## 📝 Essay Evaluation")
-    if not is_logged_in():
-        st.warning("Please sign in to submit an essay.")
-        if st.button("🔑 Go to Login", key="eval_goto_login"):
-            st.session_state["current_page"] = "login"
-            st.rerun()
-    else:
-        st.info("🚧 The AI essay evaluation engine is coming soon! This page will let you submit essays and receive instant feedback.")
-        with st.form("essay_placeholder"):
-            title = st.text_input("Essay Title", placeholder="e.g. The Impact of AI on Education")
-            content = st.text_area("Essay Content", height=250, placeholder="Paste or type your essay here…")
-            submitted = st.form_submit_button("🔍  Evaluate", use_container_width=True)
-            if submitted:
-                if not title.strip() or not content.strip():
-                    st.error("Please provide both a title and essay content.")
-                else:
-                    # Placeholder scoring (will be replaced by AI modules)
-                    import random
-                    from database.db import save_essay
-                    g = round(random.uniform(5, 9), 1)
-                    c = round(random.uniform(5, 9), 1)
-                    a = round(random.uniform(4, 9), 1)
-                    o = round((g + c + a) / 3, 1)
-                    fb = "This is placeholder feedback. The AI evaluation engine will provide detailed, actionable suggestions here."
-                    save_essay(st.session_state["user_id"], title.strip(), content.strip(), g, c, a, o, fb)
-                    st.success(f"Essay submitted! Overall score: **{o}/10**")
-                    st.balloons()
+    render_evaluate_page()
 
 else:
     render_home_page()
