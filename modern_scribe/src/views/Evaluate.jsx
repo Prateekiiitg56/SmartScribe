@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Sparkles, FileText, Target, Zap, Layers, Cpu } from 'lucide-react';
+import { Send, Sparkles, FileText, Target, Zap, Layers, Cpu, Loader2 } from 'lucide-react';
 import { apiCall } from '../api';
 
 const ModernEvaluate = () => {
