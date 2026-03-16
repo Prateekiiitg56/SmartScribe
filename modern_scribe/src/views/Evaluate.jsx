@@ -28,11 +28,11 @@ const ModernEvaluate = () => {
             });
 
             setResult({
-                score: data.overall,
+                score: Math.round(data.overall),
                 dimensions: [
-                    { label: 'Grammar', value: data.grammar, icon: Layers },
-                    { label: 'Coherence', value: data.coherence, icon: Zap },
-                    { label: 'Strength', value: data.argumentation, icon: Target }
+                    { label: 'Grammar', value: Math.round(data.grammar), icon: Layers },
+                    { label: 'Coherence', value: Math.round(data.coherence), icon: Zap },
+                    { label: 'Argumentation', value: Math.round(data.argumentation), icon: Target }
                 ],
                 feedback: data.feedback,
                 id: data.id
@@ -64,7 +64,7 @@ const ModernEvaluate = () => {
     };
 
     return (
-        <section style={{ padding: '140px 8% 80px', minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'radial-gradient(circle at 90% 10%, rgba(212, 130, 10, 0.02) 0%, transparent 40%)' }}>
+        <section style={{ padding: '140px 8% 80px', minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'radial-gradient(circle at 90% 10%, rgba(212, 130, 10, 0.03) 0%, transparent 50%)' }}>
             <div style={{ maxWidth: '1400px', width: '100%', margin: '0 auto' }}>
                 <header style={{ marginBottom: '4rem' }}>
                     <motion.div
@@ -73,44 +73,44 @@ const ModernEvaluate = () => {
                         style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.2rem' }}
                     >
                         <Cpu size={14} color="var(--amber)" />
-                        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.7rem', color: 'var(--amber)', textTransform: 'uppercase', letterSpacing: '0.4em' }}>EVALUATE ESSAY</span>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.7rem', color: 'var(--amber)', textTransform: 'uppercase', letterSpacing: '0.4em' }}>ANALYSIS ENGINE</span>
                     </motion.div>
-                    <h2 style={{ fontSize: '4rem', fontWeight: 900, marginBottom: '1.5rem', letterSpacing: '-0.02em' }}>New <em>Essay.</em></h2>
-                    <p style={{ color: 'var(--muted)', fontSize: '1.1rem', maxWidth: '600px', lineHeight: 1.6 }}>Get instant feedback on your writing quality and grammar.</p>
+                    <h2 style={{ fontSize: 'clamp(2.5rem, 5vw, 4rem)', fontWeight: 900, marginBottom: '1rem', letterSpacing: '-0.02em' }}>Craft your <em>Masterpiece.</em></h2>
+                    <p style={{ color: 'var(--muted)', fontSize: '1.1rem', maxWidth: '600px', lineHeight: 1.6 }}>Our neural network analyzes your prose for structural integrity and semantic depth.</p>
                 </header>
 
-                <div style={{ display: 'grid', gridTemplateColumns: result ? '1fr 450px' : '1fr', gap: '3.5rem', transition: 'all 0.6s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: result ? '1fr 420px' : '1fr', gap: '4rem', transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)', alignItems: 'start' }}>
                     {/* Editor Area */}
                     <motion.div
                         layout
                         className="glass"
-                        style={{ padding: '3rem', position: 'relative', border: '1px solid var(--border)', borderRadius: '2px' }}
+                        style={{ padding: '3.5rem', position: 'relative', border: '1px solid var(--border)', clipPath: 'polygon(0 0, 100% 0, 100% 100%, 30px 100%, 0 calc(100% - 30px))' }}
                     >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2.5rem', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', gap: '1rem', color: 'rgba(240,235,224,0.4)', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3rem', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', gap: '1rem', color: 'var(--amber)', opacity: 0.6, alignItems: 'center' }}>
                                 <FileText size={18} />
-                                <span style={{ fontFamily: 'var(--mono)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.15em' }}>CONTENT</span>
+                                <span style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.2em' }}>MANUSCRIPT</span>
                             </div>
-                            <div style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', color: 'var(--amber)', padding: '0.4rem 0.8rem', background: 'rgba(212,130,10,0.05)', borderRadius: '20px' }}>
+                            <div style={{ fontFamily: 'var(--mono)', fontSize: '0.6rem', color: 'var(--paper)', padding: '0.5rem 1rem', background: 'rgba(240,235,224,0.03)', border: '1px solid var(--border)', borderRadius: '2px', letterSpacing: '0.1em' }}>
                                 {essay.split(/\s+/).filter(x => x).length} WORDS
                             </div>
                         </div>
 
-                        <div style={{ marginBottom: '2rem' }}>
+                        <div style={{ marginBottom: '2.5rem' }}>
                             <input
                                 type="text"
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
-                                placeholder="Title"
+                                placeholder="Essay Title"
                                 style={{
                                     width: '100%',
                                     padding: '1rem 0',
                                     background: 'transparent',
                                     border: 'none',
-                                    borderBottom: '1px solid var(--border)',
-                                    color: 'var(--amber)',
+                                    borderBottom: '1px solid rgba(212,130,10,0.1)',
+                                    color: 'var(--amber2)',
                                     fontFamily: 'var(--serif)',
-                                    fontSize: '1.8rem',
+                                    fontSize: '2.2rem',
                                     fontWeight: 800,
                                     outline: 'none',
                                     marginBottom: '1rem'
@@ -121,16 +121,16 @@ const ModernEvaluate = () => {
                         <textarea
                             value={essay}
                             onChange={(e) => setEssay(e.target.value)}
-                            placeholder="Start typing your essay..."
+                            placeholder="Begin your narrative here..."
                             style={{
                                 width: '100%',
-                                minHeight: '600px',
+                                minHeight: '650px',
                                 background: 'transparent',
                                 border: 'none',
-                                color: 'var(--paper)',
+                                color: 'rgba(240,235,224,0.9)',
                                 fontFamily: 'var(--body)',
-                                fontSize: '1.15rem',
-                                lineHeight: '1.9',
+                                fontSize: '1.2rem',
+                                lineHeight: '2',
                                 outline: 'none',
                                 resize: 'none',
                                 opacity: isEvaluating ? 0.3 : 1,
@@ -138,47 +138,50 @@ const ModernEvaluate = () => {
                             }}
                         />
 
-                        {aiResponse && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                style={{ margin: '2rem 0', padding: '1.5rem', background: 'rgba(212,130,10,0.05)', borderLeft: '3px solid var(--amber)', fontFamily: 'var(--serif)' }}
-                            >
-                                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', color: 'var(--amber)', marginBottom: '0.8rem', fontSize: '0.7rem', fontFamily: 'var(--mono)', textTransform: 'uppercase' }}>
-                                    <Sparkles size={14} /> AI Insight
-                                </div>
-                                <p style={{ color: 'var(--paper)', lineHeight: '1.6' }}>{aiResponse}</p>
-                            </motion.div>
-                        )}
+                        <AnimatePresence>
+                            {aiResponse && (
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.98 }}
+                                    style={{ margin: '3rem 0', padding: '2rem', background: 'rgba(212,130,10,0.02)', borderLeft: '2px solid var(--amber)', borderTop: '1px solid rgba(212,130,10,0.05)', borderRadius: '2px' }}
+                                >
+                                    <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', color: 'var(--amber2)', marginBottom: '1rem', fontSize: '0.7rem', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.2em' }}>
+                                        <Sparkles size={14} /> AI RESPONSE
+                                    </div>
+                                    <p style={{ color: 'var(--paper)', lineHeight: '1.8', fontSize: '1.05rem', fontStyle: 'italic', fontFamily: 'var(--serif)' }}>{aiResponse}</p>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
 
-                        <div style={{ marginTop: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '2rem', borderTop: '1px solid var(--border)', paddingTop: '2rem' }}>
+                        <div style={{ marginTop: '4rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '3rem', borderTop: '1px solid var(--border)', paddingTop: '2.5rem' }}>
                             <div style={{ flex: 1, position: 'relative' }}>
                                 <input
                                     type="text"
                                     value={aiQuestion}
                                     onChange={(e) => setAiQuestion(e.target.value)}
-                                    placeholder="Ask AI about your essay..."
-                                    style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', padding: '0.8rem 1.2rem', color: 'var(--paper)', fontFamily: 'var(--mono)', fontSize: '0.75rem', borderRadius: '4px', outline: 'none' }}
+                                    placeholder="Interrogate the AI..."
+                                    style={{ width: '100%', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', padding: '1rem 1.5rem', color: 'var(--paper)', fontFamily: 'var(--mono)', fontSize: '0.75rem', borderRadius: '2px', outline: 'none' }}
                                     onKeyPress={(e) => e.key === 'Enter' && handleAskAI()}
                                 />
                                 <button
                                     onClick={handleAskAI}
                                     disabled={isAsking || !aiQuestion.trim() || !essay.trim()}
-                                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--amber)', cursor: 'pointer', opacity: isAsking ? 0.5 : 1 }}
+                                    style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--amber)', cursor: 'pointer', opacity: isAsking ? 0.5 : 1 }}
                                 >
-                                    {isAsking ? '...' : <Sparkles size={16} />}
+                                    {isAsking ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={18} />}
                                 </button>
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-                                {error && <span style={{ color: '#ef4444', fontFamily: 'var(--mono)', fontSize: '0.7rem' }}>ERROR: {error}</span>}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '2.5rem' }}>
+                                {error && <span style={{ color: '#ef4444', fontFamily: 'var(--mono)', fontSize: '0.65rem', textTransform: 'uppercase' }}>{error}</span>}
                                 <button
                                     onClick={handleEvaluate}
                                     disabled={isEvaluating || !essay.trim()}
                                     className="btn-premium"
-                                    style={{ opacity: isEvaluating || !essay.trim() ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: '1.2rem' }}
+                                    style={{ opacity: isEvaluating || !essay.trim() ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '1.1rem 3.5rem' }}
                                 >
-                                    {isEvaluating ? 'PROGRESSING...' : 'EVALUATE'}
+                                    {isEvaluating ? 'PROCESSING...' : 'ANALYZE'}
                                     <Send size={18} />
                                 </button>
                             </div>
@@ -189,49 +192,51 @@ const ModernEvaluate = () => {
                     <AnimatePresence>
                         {result && (
                             <motion.div
-                                initial={{ opacity: 0, x: 50, scale: 0.95 }}
-                                animate={{ opacity: 1, x: 0, scale: 1 }}
-                                exit={{ opacity: 0, x: 50, scale: 0.95 }}
+                                initial={{ opacity: 0, x: 40 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 40 }}
                                 className="glass"
-                                style={{ padding: '3rem', border: '1px solid var(--border)', alignSelf: 'start', position: 'sticky', top: '120px' }}
+                                style={{ padding: '3rem', border: '1px solid var(--border)', alignSelf: 'start', position: 'sticky', top: '120px', clipPath: 'polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px)' }}
                             >
-                                <div style={{ textAlign: 'center', marginBottom: '3.5rem' }}>
-                                    <div style={{ fontFamily: 'var(--mono)', fontSize: '0.7rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.2em', marginBottom: '1.5rem' }}>Total Score</div>
+                                <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
+                                    <div style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.3em', marginBottom: '2rem' }}>Proficiency Score</div>
                                     <div style={{ position: 'relative', display: 'inline-block' }}>
-                                        <div style={{ fontFamily: 'var(--serif)', fontSize: '6rem', fontWeight: 900, color: 'var(--amber2)', lineHeight: 1 }}>{result.score}</div>
-                                        <div style={{ position: 'absolute', top: -10, right: -25, fontFamily: 'var(--mono)', fontSize: '1.2rem', color: 'var(--amber)', opacity: 0.5 }}>%</div>
+                                        <div style={{ fontFamily: 'var(--serif)', fontSize: '6.5rem', fontWeight: 900, color: 'var(--amber)', lineHeight: 0.9, letterSpacing: '-0.05em' }}>{result.score}</div>
+                                        <div style={{ position: 'absolute', top: 5, right: -25, fontFamily: 'var(--mono)', fontSize: '1.4rem', color: 'var(--amber)', opacity: 0.4 }}>%</div>
                                     </div>
-                                    <div style={{ fontFamily: 'var(--mono)', fontSize: '0.7rem', color: 'var(--paper)', marginTop: '1.5rem', letterSpacing: '0.1em' }}>ID: #{result.id || '---'}</div>
+                                    <div style={{ fontFamily: 'var(--mono)', fontSize: '0.6rem', color: 'var(--muted)', marginTop: '2rem', letterSpacing: '0.2em' }}>LOG ID: SS-{result.id || 'N/A'}</div>
                                 </div>
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2.5rem' }}>
                                     {result.dimensions.map((dim, i) => (
                                         <div key={i}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem', alignItems: 'center' }}>
-                                                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
-                                                    <dim.icon size={14} color="var(--muted)" />
-                                                    <span style={{ fontFamily: 'var(--mono)', fontSize: '0.7rem', color: 'rgba(240,235,224,0.6)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{dim.label}</span>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.9rem', alignItems: 'flex-end' }}>
+                                                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                                    <div style={{ width: 32, height: 32, background: 'rgba(212,130,10,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--amber)' }}>
+                                                        <dim.icon size={16} />
+                                                    </div>
+                                                    <span style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', color: 'rgba(240,235,224,0.7)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{dim.label}</span>
                                                 </div>
-                                                <span style={{ fontFamily: 'var(--serif)', fontSize: '1.2rem', color: 'var(--amber)', fontWeight: 700 }}>{dim.value}%</span>
+                                                <span style={{ fontFamily: 'var(--serif)', fontSize: '1.3rem', color: 'var(--paper)', fontWeight: 800 }}>{dim.value}%</span>
                                             </div>
-                                            <div style={{ height: '2px', background: 'rgba(212,130,10,0.05)', width: '100%', position: 'relative' }}>
+                                            <div style={{ height: '3px', background: 'rgba(255,255,255,0.03)', width: '100%', position: 'relative', borderRadius: '4px', overflow: 'hidden' }}>
                                                 <motion.div
                                                     initial={{ width: 0 }}
                                                     animate={{ width: `${dim.value}%` }}
-                                                    transition={{ delay: 0.5 + i * 0.1, duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
-                                                    style={{ position: 'absolute', top: 0, left: 0, height: '100%', background: 'var(--amber)', boxShadow: '0 0 15px rgba(212,130,10,0.3)' }}
+                                                    transition={{ delay: 0.3 + i * 0.1, duration: 2, ease: [0.16, 1, 0.3, 1] }}
+                                                    style={{ position: 'absolute', top: 0, left: 0, height: '100%', background: 'linear-gradient(90deg, var(--amber3), var(--amber))' }}
                                                 />
                                             </div>
                                         </div>
                                     ))}
                                 </div>
 
-                                <div style={{ marginTop: '4rem', padding: '2rem', background: 'rgba(212,130,10,0.03)', border: '1px solid rgba(212,130,10,0.1)', position: 'relative' }}>
-                                    <div style={{ position: 'absolute', top: -10, left: 20, background: 'var(--ink)', padding: '0 10px', display: 'flex', gap: '0.8rem', alignItems: 'center', color: 'var(--amber2)' }}>
+                                <div style={{ marginTop: '4.5rem', padding: '2.5rem', background: 'rgba(240,235,224,0.02)', border: '1px solid rgba(212,130,10,0.08)', borderRadius: '2px' }}>
+                                    <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', color: 'var(--amber2)', marginBottom: '1.2rem' }}>
                                         <Sparkles size={14} />
-                                        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.1em' }}>AI FEEDBACK</span>
+                                        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.6rem', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.2em' }}>CRITICAL FEEDBACK</span>
                                     </div>
-                                    <p style={{ fontSize: '1rem', color: 'rgba(240,235,224,0.8)', lineHeight: '1.7', fontStyle: 'italic', fontFamily: 'var(--serif)' }}>"{result.feedback}"</p>
+                                    <p style={{ fontSize: '1rem', color: 'rgba(240,235,224,0.7)', lineHeight: '1.8', fontStyle: 'italic', fontFamily: 'var(--serif)' }}>"{result.feedback}"</p>
                                 </div>
                             </motion.div>
                         )}
