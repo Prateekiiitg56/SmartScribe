@@ -122,6 +122,15 @@ def get_average_scores(user_id):
         "avg_overall": round(row['avg_overall'], 1)
     }
 
+def get_total_essays(user_id):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT COUNT(*) AS total FROM essays WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+    conn.close()
+    return int(row['total']) if row and row['total'] is not None else 0
+
 def delete_essay(essay_id, user_id):
     conn = get_connection()
     cur = conn.cursor()

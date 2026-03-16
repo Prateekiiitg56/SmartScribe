@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BarChart3, User, History, Download, TrendingUp, Star, Award, ChevronRight, Loader2, Trash2, FileText } from 'lucide-react';
+import { BarChart3, User, History, Download, TrendingUp, Star, Award, ChevronRight, Loader2, Trash2, FileText, CheckCircle2 } from 'lucide-react';
 import { apiCall } from '../api';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import 'jspdf-autotable';
 
 const KPICard = ({ icon: Icon, label, value, trend, delay, color = 'var(--amber)' }) => (
     <motion.div
@@ -48,7 +49,7 @@ const HistoryRow = ({ essay, delay, onOpen }) => (
     </motion.div>
 );
 
-const Modal = ({ essay, onClose, onDelete, onDownload }) => {
+const Modal = ({ essay, onClose, onDelete, onDownload, isDeleting }) => {
     if (!essay) return null;
 
     return (
@@ -72,11 +73,20 @@ const Modal = ({ essay, onClose, onDelete, onDownload }) => {
                         <div style={{ fontFamily: 'var(--mono)', fontSize: '0.7rem', color: 'var(--muted)' }}>Submitted on {new Date(essay.submitted_at).toLocaleString()}</div>
                     </div>
                     <div style={{ display: 'flex', gap: '1rem' }}>
-                        <button onClick={() => { console.log('Downloading PDF...'); onDownload(essay); }} style={{ background: 'rgba(212,130,10,0.1)', border: '1px solid var(--amber)', padding: '0.8rem', color: 'var(--amber)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <button
+                            disabled={isDeleting}
+                            onClick={() => onDownload(essay)}
+                            style={{ background: 'rgba(212,130,10,0.1)', border: '1px solid var(--amber)', padding: '0.8rem', color: 'var(--amber)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: isDeleting ? 0.5 : 1 }}
+                        >
                             <Download size={16} /> Save PDF
                         </button>
-                        <button onClick={() => { console.log('Deleting essay...'); onDelete(essay.id); }} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', padding: '0.8rem', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Trash2 size={16} /> Delete
+                        <button
+                            disabled={isDeleting}
+                            onClick={() => onDelete(essay.id)}
+                            style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', padding: '0.8rem', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: isDeleting ? 0.5 : 1 }}
+                        >
+                            {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                            {isDeleting ? 'Deleting...' : 'Delete'}
                         </button>
                         <button onClick={onClose} style={{ background: 'transparent', border: '1px solid var(--border)', padding: '0.8rem', color: 'var(--paper)', cursor: 'pointer' }}>Close</button>
                     </div>
@@ -131,6 +141,8 @@ const ModernDashboard = () => {
     const [selectedEssay, setSelectedEssay] = useState(null);
     const [showAllHistory, setShowAllHistory] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [genStatus, setGenStatus] = useState(''); // '', 'generating', 'done'
     const user = JSON.parse(localStorage.getItem('user') || '{}');
 
     const fetchDashboardData = async () => {
@@ -154,27 +166,66 @@ const ModernDashboard = () => {
 
     const handleDeleteEssay = async (essayId) => {
         if (!confirm('Are you sure you want to delete this essay forever?')) return;
+        setIsDeleting(true);
         try {
             await apiCall(`/essays/${essayId}`, { method: 'DELETE' });
+            // Immediately update local state for snappiness
+            setHistory(prev => prev.filter(e => e.id !== essayId));
+            if (stats && stats.recent_essays) {
+                setStats({
+                    ...stats,
+                    recent_essays: stats.recent_essays.filter(e => e.id !== essayId),
+                    total_submissions: Math.max((stats.total_submissions || 0) - 1, 0)
+                });
+            }
             setSelectedEssay(null);
+            // Also refresh from server to ensure stats (averages) are recalculated
             fetchDashboardData();
         } catch (err) {
             console.error('Delete error:', err);
             alert('Failed to delete essay: ' + err.message);
+        } finally {
+            setIsDeleting(false);
         }
     };
 
     const downloadSingleEssayPDF = (essay) => {
         try {
-            console.log('Generating Single PDF for:', essay.title);
             const doc = new jsPDF();
+            const pageHeight = doc.internal.pageSize.getHeight();
+
+            const writeWrappedBlock = (heading, text, startY) => {
+                let currentY = startY;
+                doc.setTextColor(212, 130, 10);
+                doc.setFontSize(12);
+                doc.text(heading, 20, currentY);
+                currentY += 10;
+
+                doc.setTextColor(240, 235, 224);
+                doc.setFontSize(10);
+                const lines = doc.splitTextToSize(text || 'N/A', 170);
+
+                lines.forEach((line) => {
+                    if (currentY > pageHeight - 20) {
+                        doc.addPage();
+                        doc.setFillColor(7, 8, 10);
+                        doc.rect(0, 0, 210, 297, 'F');
+                        currentY = 20;
+                    }
+                    doc.text(line, 20, currentY);
+                    currentY += 5;
+                });
+
+                return currentY + 10;
+            };
 
             doc.setFillColor(7, 8, 10);
             doc.rect(0, 0, 210, 297, 'F');
 
             doc.setTextColor(212, 130, 10);
+            const title = essay.title || 'Untitled Essay';
             doc.setFontSize(24);
-            doc.text(essay.title, 20, 30);
+            doc.text(title, 20, 30);
 
             doc.setTextColor(150, 150, 150);
             doc.setFontSize(10);
@@ -184,7 +235,7 @@ const ModernDashboard = () => {
             doc.setFontSize(12);
             doc.text(`Overall Score: ${Math.round(essay.overall_score)}%`, 20, 55);
 
-            autoTable(doc, {
+            const tableConfig = {
                 startY: 65,
                 head: [['Dimensions', 'Score']],
                 body: [
@@ -195,37 +246,27 @@ const ModernDashboard = () => {
                 theme: 'grid',
                 headStyles: { fillColor: [212, 130, 10] },
                 styles: { fillColor: [20, 20, 20], textColor: [240, 235, 224] }
-            });
+            };
 
-            let finalY = doc.lastAutoTable.finalY + 15;
-            doc.setTextColor(212, 130, 10);
-            doc.text("AI FEEDBACK", 20, finalY);
-            doc.setTextColor(240, 235, 224);
-            doc.setFontSize(10);
-            const splitFeedback = doc.splitTextToSize(essay.feedback || 'No feedback available.', 170);
-            doc.text(splitFeedback, 20, finalY + 10);
+            autoTable(doc, tableConfig);
 
-            finalY += (splitFeedback.length * 5) + 20;
-            if (finalY > 260) { doc.addPage(); finalY = 20; }
+            let finalY = (doc.lastAutoTable ? doc.lastAutoTable.finalY : 100) + 15;
+            finalY = writeWrappedBlock('AI FEEDBACK', essay.feedback || 'No feedback available.', finalY);
+            writeWrappedBlock('CONTENT', essay.content || 'No content.', finalY);
 
-            doc.setTextColor(212, 130, 10);
-            doc.text("CONTENT", 20, finalY);
-            doc.setTextColor(240, 235, 224);
-            const splitContent = doc.splitTextToSize(essay.content || 'No content.', 170);
-            doc.text(splitContent, 20, finalY + 10);
-
-            doc.save(`${essay.title.replace(/\s+/g, '_')}_Analysis.pdf`);
-            console.log('Single PDF saved.');
+            doc.save(`${title.replace(/\s+/g, '_')}_Analysis.pdf`);
         } catch (err) {
             console.error('PDF Generation Error:', err);
-            alert('Failed to generate PDF. Check console for details.');
+            alert('Failed to generate PDF: ' + err.message);
         }
     };
 
     const generateFullReport = () => {
         try {
-            console.log('Generating Full Report...');
-            if (!history || history.length === 0) return alert('No essays found to generate a report.');
+            if (!history || history.length === 0) return alert('No essays found to generate a report. Start writing first!');
+
+            setIsGenerating(true);
+            setGenStatus('generating');
 
             const doc = new jsPDF();
             doc.setFillColor(7, 8, 10);
@@ -239,25 +280,33 @@ const ModernDashboard = () => {
             doc.setFontSize(14);
             doc.text(`Mastery Overview for ${user.fullName || 'Writer'}`, 20, 55);
 
-            autoTable(doc, {
+            const tableConfig = {
                 startY: 70,
                 head: [['Date', 'Title', 'Score', 'Status']],
                 body: history.map(e => [
                     new Date(e.submitted_at).toLocaleDateString(),
-                    e.title,
+                    e.title || 'Untitled',
                     `${Math.round(e.overall_score)}%`,
                     e.overall_score > 70 ? 'Excellent' : 'Improving'
                 ]),
                 theme: 'grid',
                 headStyles: { fillColor: [212, 130, 10] },
                 styles: { fillColor: [15, 15, 15], textColor: [200, 200, 200] }
-            });
+            };
+
+            autoTable(doc, tableConfig);
 
             doc.save(`SmartScribe_Full_Report_${new Date().toISOString().split('T')[0]}.pdf`);
-            console.log('Full report saved.');
+            setGenStatus('done');
+            setTimeout(() => {
+                setIsGenerating(false);
+                setGenStatus('');
+            }, 2000);
         } catch (err) {
             console.error('Report Generation Error:', err);
-            alert('Failed to generate report. Check console for details.');
+            alert('Failed to generate report: ' + err.message);
+            setIsGenerating(false);
+            setGenStatus('');
         }
     };
 
@@ -286,7 +335,7 @@ const ModernDashboard = () => {
                     <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', padding: '1.2rem 2.5rem', background: 'rgba(240,235,224,0.02)', border: '1px solid var(--border)', clipPath: 'polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px)' }}>
                         <div style={{ textAlign: 'right' }}>
                             <div style={{ fontFamily: 'var(--mono)', fontSize: '0.55rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Member Since</div>
-                            <div style={{ fontFamily: 'var(--serif)', fontSize: '0.9rem', color: 'var(--paper)', fontWeight: 700 }}>2025</div>
+                            <div style={{ fontFamily: 'var(--serif)', fontSize: '0.9rem', color: 'var(--paper)', fontWeight: 700 }}>2026</div>
                         </div>
                         <div style={{ width: 48, height: 48, background: 'linear-gradient(135deg, var(--amber), var(--amber2))', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, color: '#000', boxShadow: '0 0 20px rgba(212,130,10,0.3)' }}>
                             {user.fullName ? user.fullName.split(' ').map(n => n[0]).join('') : 'U'}
@@ -318,7 +367,7 @@ const ModernDashboard = () => {
                             <span style={{ fontFamily: 'var(--mono)', fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.2em' }}>Date</span>
                             <span style={{ fontFamily: 'var(--mono)', fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.2em' }}>Essay Title</span>
                             <span style={{ fontFamily: 'var(--mono)', fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.2em', textAlign: 'center' }}>Score</span>
-                            <span style={{ fontFamily: 'var(--mono)', fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.2em' }}>Assigned</span>
+                            <span style={{ fontFamily: 'var(--mono)', fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.2em' }}>Status</span>
                             <span />
                         </div>
 
@@ -370,10 +419,18 @@ const ModernDashboard = () => {
                             </div>
                             <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '1.5rem', lineHeight: 1.6 }}>Download a comprehensive PDF report of your progress and AI feedback across all sessions.</p>
                             <button
-                                onClick={() => { console.log('Generate Report clicked'); generateFullReport(); }}
-                                style={{ width: '100%', padding: '0.8rem', background: 'transparent', border: '1px solid var(--border)', color: 'var(--paper)', fontFamily: 'var(--mono)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.15em', fontWeight: 700, cursor: 'pointer' }}
+                                disabled={isGenerating}
+                                onClick={generateFullReport}
+                                style={{
+                                    width: '100%', padding: '0.8rem', background: isGenerating ? 'rgba(212,130,10,0.1)' : 'transparent',
+                                    border: '1px solid var(--border)', color: isGenerating ? 'var(--amber)' : 'var(--paper)',
+                                    fontFamily: 'var(--mono)', fontSize: '0.6rem', textTransform: 'uppercase',
+                                    letterSpacing: '0.15em', fontWeight: 700, cursor: isGenerating ? 'default' : 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem'
+                                }}
                             >
-                                Generate Report
+                                {genStatus === 'generating' ? <Loader2 size={14} className="animate-spin" /> : genStatus === 'done' ? <CheckCircle2 size={14} /> : null}
+                                {genStatus === 'generating' ? 'Analyzing...' : genStatus === 'done' ? 'Report Ready' : 'Generate Report'}
                             </button>
                         </div>
                     </div>
@@ -387,6 +444,7 @@ const ModernDashboard = () => {
                         onClose={() => setSelectedEssay(null)}
                         onDelete={handleDeleteEssay}
                         onDownload={downloadSingleEssayPDF}
+                        isDeleting={isDeleting}
                     />
                 )}
             </AnimatePresence>

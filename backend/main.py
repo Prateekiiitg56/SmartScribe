@@ -133,7 +133,7 @@ async def google_login(body: GoogleAuth):
 async def evaluate_essay(essay: EssaySubmit, user_id: int = Depends(auth.get_current_user_id)):
     result = ai.get_ai_evaluation(essay.title, essay.content)
 
-    db.save_essay(
+    essay_id = db.save_essay(
         user_id=user_id,
         title=essay.title,
         content=essay.content,
@@ -144,7 +144,7 @@ async def evaluate_essay(essay: EssaySubmit, user_id: int = Depends(auth.get_cur
         feedback=result["feedback"]
     )
 
-    return result
+    return {**result, "id": essay_id}
 
 # --- Ask AI Route ---
 @app.post("/api/ask-ai")
@@ -157,11 +157,12 @@ async def ask_ai(req: AskAI, user_id: int = Depends(auth.get_current_user_id)):
 async def get_stats(user_id: int = Depends(auth.get_current_user_id)):
     averages = db.get_average_scores(user_id)
     essays = db.get_user_essays(user_id, limit=5)
+    total_submissions = db.get_total_essays(user_id)
 
     return {
         "averages": averages,
         "recent_essays": essays,
-        "total_submissions": len(essays)
+        "total_submissions": total_submissions
     }
 
 @app.get("/api/dashboard/essays")
