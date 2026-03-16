@@ -41,19 +41,16 @@ const ModernAuth = ({ onBack, onAuthSuccess }) => {
         }
     };
 
-    // Real Google OAuth using credential response (One Tap / popup)
     const googleLogin = useGoogleLogin({
         onSuccess: async (tokenResponse) => {
             setLoading(true);
             setError('');
             try {
-                // Get user info from Google using the access token
                 const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
                     headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
                 });
                 const userInfo = await userInfoRes.json();
 
-                // Send to our backend to create/find user and get JWT
                 const data = await apiCall('/auth/google', {
                     method: 'POST',
                     body: JSON.stringify({
@@ -84,93 +81,100 @@ const ModernAuth = ({ onBack, onAuthSuccess }) => {
     });
 
     return (
-        <div style={{ padding: '120px 8% 60px', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', minHeight: '100vh', position: 'relative', zIndex: 10 }}>
-            {/* Background Glows */}
-            <div style={{ position: 'absolute', top: '20%', left: '30%', width: '400px', height: '400px', background: 'radial-gradient(circle, rgba(212,130,10,0.05) 0%, transparent 70%)', pointerEvents: 'none', zIndex: -1 }} />
-
+        <div style={{ padding: '140px 8% 80px', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: 'radial-gradient(circle at 10% 90%, rgba(212, 130, 10, 0.04) 0%, transparent 40%)' }}>
             <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
                 className="glass"
-                style={{ width: '100%', maxWidth: '460px', padding: '3.5rem', border: '1px solid var(--border)', position: 'relative', overflow: 'hidden' }}
+                style={{
+                    width: '100%',
+                    maxWidth: '480px',
+                    padding: '4rem',
+                    border: '1px solid var(--border)',
+                    position: 'relative',
+                    clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 30px), calc(100% - 30px) 100%, 0 100%)'
+                }}
             >
-                {/* Top Accent Line */}
-                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '2px', background: 'linear-gradient(90deg, transparent, var(--amber), transparent)' }} />
+                <div style={{ position: 'absolute', top: 0, left: 30, right: 30, height: '1px', background: 'linear-gradient(90deg, transparent, var(--amber), transparent)', opacity: 0.4 }} />
 
-                <header style={{ marginBottom: '2.5rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', color: 'var(--amber)', marginBottom: '1.2rem' }}>
-                        <ShieldCheck size={18} />
-                        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.3em', fontWeight: 600 }}>Account Access</span>
+                <header style={{ marginBottom: '3.5rem', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '0.8rem', color: 'var(--amber)', marginBottom: '1.5rem' }}>
+                        <ShieldCheck size={20} />
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.4em', fontWeight: 600 }}>IDENTITY CLEARANCE</span>
                     </div>
-                    <h2 style={{ fontSize: '2.6rem', fontWeight: 900, marginBottom: '0.6rem', lineHeight: 1.1 }}>
-                        {isLogin ? 'Welcome back.' : 'Create Account.'}
+                    <h2 style={{ fontSize: '3rem', fontWeight: 900, marginBottom: '0.8rem', letterSpacing: '-0.03em' }}>
+                        {isLogin ? 'Welcome back.' : 'Forge Account.'}
                     </h2>
-                    <p style={{ color: 'var(--muted)', fontSize: '0.9rem', fontFamily: 'var(--body)' }}>
-                        {isLogin ? 'Enter your details to sign in.' : 'Fill in the information to get started.'}
+                    <p style={{ color: 'var(--muted)', fontSize: '1rem', lineHeight: 1.6 }}>
+                        {isLogin ? 'Access your personal archives.' : 'Begin your journey with SmartScribe.'}
                     </p>
                 </header>
 
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                     {error && (
-                        <div style={{ padding: '0.8rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171', fontSize: '0.75rem', fontFamily: 'var(--mono)', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                            <AlertCircle size={14} />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            style={{ padding: '1rem', background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171', fontSize: '0.75rem', fontFamily: 'var(--mono)', display: 'flex', alignItems: 'center', gap: '1rem' }}
+                        >
+                            <AlertCircle size={16} />
                             {error}
-                        </div>
+                        </motion.div>
                     )}
 
                     <AnimatePresence mode="wait">
                         {!isLogin && (
                             <motion.div
-                                key="register-fields"
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: 'auto' }}
-                                exit={{ opacity: 0, height: 0 }}
-                                style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', overflow: 'hidden' }}
+                                key="reg-fields"
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}
                             >
-                                <div className="input-group" style={{ position: 'relative' }}>
-                                    <div style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }}><User size={16} /></div>
+                                <div style={{ position: 'relative' }}>
+                                    <div style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', opacity: 0.6 }}><User size={16} /></div>
                                     <input
                                         type="text"
-                                        placeholder="Full Name"
+                                        placeholder="Legal Name"
                                         value={formData.fullName}
                                         onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                                        style={{ width: '100%', padding: '1rem 1rem 1rem 3.5rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(212,130,10,0.1)', color: 'var(--paper)', fontFamily: 'var(--mono)', fontSize: '0.85rem', outline: 'none' }}
+                                        style={{ width: '100%', padding: '1.2rem 1.2rem 1.2rem 3.5rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', color: 'var(--paper)', fontFamily: 'var(--mono)', fontSize: '0.8rem', outline: 'none' }}
                                     />
                                 </div>
-                                <div className="input-group" style={{ position: 'relative' }}>
-                                    <div style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }}><Mail size={16} /></div>
+                                <div style={{ position: 'relative' }}>
+                                    <div style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', opacity: 0.6 }}><Mail size={16} /></div>
                                     <input
                                         type="email"
-                                        placeholder="Email Address"
+                                        placeholder="Digital Mail"
                                         value={formData.email}
                                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                        style={{ width: '100%', padding: '1rem 1rem 1rem 3.5rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(212,130,10,0.1)', color: 'var(--paper)', fontFamily: 'var(--mono)', fontSize: '0.85rem', outline: 'none' }}
+                                        style={{ width: '100%', padding: '1.2rem 1.2rem 1.2rem 3.5rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', color: 'var(--paper)', fontFamily: 'var(--mono)', fontSize: '0.8rem', outline: 'none' }}
                                     />
                                 </div>
                             </motion.div>
                         )}
                     </AnimatePresence>
 
-                    <div className="input-group" style={{ position: 'relative' }}>
-                        <div style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }}><User size={16} /></div>
+                    <div style={{ position: 'relative' }}>
+                        <div style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', opacity: 0.6 }}><User size={16} /></div>
                         <input
                             type="text"
-                            placeholder="Username"
+                            placeholder="Codename"
                             value={formData.username}
                             onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                            style={{ width: '100%', padding: '1rem 1rem 1rem 3.5rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(212,130,10,0.1)', color: 'var(--paper)', fontFamily: 'var(--mono)', fontSize: '0.85rem', outline: 'none' }}
+                            style={{ width: '100%', padding: '1.2rem 1.2rem 1.2rem 3.5rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', color: 'var(--paper)', fontFamily: 'var(--mono)', fontSize: '0.8rem', outline: 'none' }}
                         />
                     </div>
 
-                    <div className="input-group" style={{ position: 'relative' }}>
-                        <div style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }}><Lock size={16} /></div>
+                    <div style={{ position: 'relative' }}>
+                        <div style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', opacity: 0.6 }}><Lock size={16} /></div>
                         <input
                             type="password"
-                            placeholder="Password"
+                            placeholder="Secured Access"
                             value={formData.password}
                             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                            style={{ width: '100%', padding: '1rem 1rem 1rem 3.5rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(212,130,10,0.1)', color: 'var(--paper)', fontFamily: 'var(--mono)', fontSize: '0.85rem', outline: 'none' }}
+                            style={{ width: '100%', padding: '1.2rem 1.2rem 1.2rem 3.5rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', color: 'var(--paper)', fontFamily: 'var(--mono)', fontSize: '0.8rem', outline: 'none' }}
                         />
                     </div>
 
@@ -178,51 +182,50 @@ const ModernAuth = ({ onBack, onAuthSuccess }) => {
                         type="submit"
                         disabled={loading}
                         className="btn-premium"
-                        style={{ marginTop: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', opacity: loading ? 0.7 : 1 }}
+                        style={{ marginTop: '1.5rem', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.2rem', opacity: loading ? 0.7 : 1 }}
                     >
-                        {loading ? 'Authenticating...' : (isLogin ? 'LOGIN' : 'REGISTER')}
+                        {loading ? 'CLEARING...' : (isLogin ? 'ENTER ARCHIVE' : 'JOIN THE PROJECT')}
                         <ChevronRight size={18} />
                     </button>
                 </form>
 
-                {/* Google Sign-In Divider */}
-                <div style={{ marginTop: '2.5rem', display: 'flex', alignItems: 'center', color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.2em' }}>
-                    <div style={{ flex: 1, height: '1px', background: 'rgba(212,130,10,0.1)' }} />
-                    <span style={{ margin: '0 1.5rem' }}>OR</span>
-                    <div style={{ flex: 1, height: '1px', background: 'rgba(212,130,10,0.1)' }} />
+                <div style={{ marginTop: '3rem', display: 'flex', alignItems: 'center', color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.3em' }}>
+                    <div style={{ flex: 1, height: '1px', background: 'rgba(212,130,10,0.08)' }} />
+                    <span style={{ margin: '0 1.5rem', opacity: 0.5 }}>OR USE EXTERNAL AUTH</span>
+                    <div style={{ flex: 1, height: '1px', background: 'rgba(212,130,10,0.08)' }} />
                 </div>
 
-                {/* Real Google Sign-In Button */}
                 <button
                     onClick={() => googleLogin()}
                     disabled={loading}
                     style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
-                        width: '100%', padding: '14px', marginTop: '1.5rem',
-                        background: '#fff', color: '#000', border: 'none',
-                        fontFamily: 'var(--mono)', fontSize: '0.7rem', fontWeight: 900,
-                        textTransform: 'uppercase', letterSpacing: '0.1em',
+                        width: '100%', padding: '16px', marginTop: '2rem',
+                        background: 'rgba(255,255,255,0.02)', color: 'var(--paper)', border: '1px solid var(--border)',
+                        fontFamily: 'var(--mono)', fontSize: '0.7rem', fontWeight: 600,
+                        textTransform: 'uppercase', letterSpacing: '0.2em',
                         cursor: loading ? 'not-allowed' : 'pointer',
-                        borderRadius: '2px', transition: 'all 0.3s',
+                        borderRadius: '2px', transition: 'all 0.4s',
                         opacity: loading ? 0.7 : 1
                     }}
+                    className="hover:bg-white/5"
                 >
                     <svg width="18" height="18" viewBox="0 0 48 48">
-                        <path fill="#FFC107" d="M43.6 20H24v8h11.3C33.6 33.6 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 7.9 3l5.7-5.7C34 6.5 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11.1 0 20-8.9 20-20 0-1.3-.1-2.7-.4-4z" />
-                        <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 16.1 19 13 24 13c3.1 0 5.8 1.1 7.9 3l5.7-5.7C34 6.5 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
-                        <path fill="#4CAF50" d="M24 44c5.2 0 9.9-1.9 13.5-5l-6.2-5.2C29.5 35.5 26.9 36.5 24 36.5c-5.3 0-9.6-3.5-11.2-8.2l-6.5 5C9.6 39.8 16.3 44 24 44z" />
-                        <path fill="#1976D2" d="M43.6 20H24v8h11.3c-.8 2.3-2.4 4.3-4.4 5.7l6.2 5.2C40.7 35.5 44 30.1 44 24c0-1.3-.1-2.7-.4-4z" />
+                        <path fill="#ea4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                        <path fill="#4285f4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                        <path fill="#fbbc05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24s.92 7.54 2.56 10.78l7.97-6.19z" />
+                        <path fill="#34a853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
                     </svg>
-                    {loading ? 'Signing in...' : 'Sign in with Google'}
+                    {loading ? 'SECURED ACCESS...' : 'CONTINUE WITH GOOGLE'}
                 </button>
 
-                <footer style={{ marginTop: '3rem', textAlign: 'center' }}>
+                <footer style={{ marginTop: '3.5rem', textAlign: 'center' }}>
                     <button
                         onClick={() => setIsLogin(!isLogin)}
-                        style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: '0.7rem', cursor: 'pointer', transition: 'color 0.3s' }}
-                        className="hover:text-[var(--amber2)]"
+                        style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: '0.65rem', cursor: 'pointer', transition: 'all 0.3s', textTransform: 'uppercase', letterSpacing: '0.2em' }}
+                        className="hover:text-[var(--amber)]"
                     >
-                        {isLogin ? "Need an account? Sign Up" : "Already have an account? Sign In"}
+                        {isLogin ? "Generate New Credentials — Sign Up" : "Existing Clearance Detected — Sign In"}
                     </button>
                 </footer>
             </motion.div>

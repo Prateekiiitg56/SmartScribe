@@ -112,4 +112,21 @@ def get_average_scores(user_id):
         (user_id,),
     ).fetchone()
     conn.close()
-    return dict(row) if row else {}
+    if not row or row['avg_overall'] is None:
+        return {"avg_grammar": 0, "avg_coherence": 0, "avg_argument": 0, "avg_overall": 0}
+
+    return {
+        "avg_grammar": round(row['avg_grammar'], 1),
+        "avg_coherence": round(row['avg_coherence'], 1),
+        "avg_argument": round(row['avg_argument'], 1),
+        "avg_overall": round(row['avg_overall'], 1)
+    }
+
+def delete_essay(essay_id, user_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM essays WHERE id = ? AND user_id = ?", (essay_id, user_id))
+    conn.commit()
+    rows_affected = cur.rowcount
+    conn.close()
+    return rows_affected > 0

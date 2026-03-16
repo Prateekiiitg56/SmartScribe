@@ -1,0 +1,338 @@
+# CS 331 – Software Engineering Lab
+## Assignment 5 — SmartScribe: Hosting, Interaction & Implementation
+
+**Project:** SmartScribe – AI-Powered Essay Evaluation System
+
+---
+
+## I. Hosting the Application Components [5 Marks]
+
+### Application Components (from Assignment 4)
+
+| # | Component | Technology |
+|---|-----------|-----------|
+| 1 | **Frontend (UI)** | React 18 + Vite |
+| 2 | **Backend (API Server)** | FastAPI (Python) |
+| 3 | **Database** | SQLite |
+| 4 | **AI Service** | OpenRouter LLM API (external) |
+| 5 | **Auth Provider** | Google OAuth 2.0 (external) |
+
+---
+
+### A. Host Site
+
+| Component | Target Hosting Platform | Reason |
+|-----------|------------------------|--------|
+| **React Frontend** | **Vercel** (or Netlify) | Free tier, instant CI/CD from GitHub, global CDN |
+| **FastAPI Backend** | **Render** (or Railway) | Supports Python runtimes, free tier, auto-deploy from GitHub |
+| **SQLite Database** | Co-located on Render (server filesystem) | SQLite is a file-based DB; runs alongside the backend |
+| **OpenRouter AI API** | External SaaS – `openrouter.ai` | Third-party LLM gateway, no self-hosting needed |
+| **Google OAuth** | External SaaS – `accounts.google.com` | Google-managed; accessed via `googleapis.com/oauth2/v3/userinfo` |
+
+---
+
+### B. Deployment Strategy (Step-by-Step)
+
+#### Step 1 – Repository Setup
+- Both `backend/` and `modern_scribe/` are in a single GitHub repository.
+- Set up separate deployment pipelines for frontend and backend.
+
+#### Step 2 – Backend Deployment (Render)
+1. Create a new **Web Service** on Render, linked to the GitHub repo.
+2. Set **root directory** to `backend/`.
+3. Set **Build Command**: `pip install -r requirements.txt`
+4. Set **Start Command**: `uvicorn main:app --host 0.0.0.0 --port 8000`
+5. Add **Environment Variables** in Render dashboard:
+   - `OPENROUTER_API_KEY` = `<key>`
+   - `JWT_SECRET` = `<strong-secret>`
+   - `GOOGLE_CLIENT_ID` = `<client-id>`
+6. Render auto-assigns a public URL (e.g., `https://smartscribe-api.onrender.com`).
+
+#### Step 3 – Frontend Deployment (Vercel)
+1. Import the GitHub repo into **Vercel**.
+2. Set **root directory** to `modern_scribe/`.
+3. Set **Build Command**: `npm run build`; **Output dir**: `dist`.
+4. Add **Environment Variable**:
+   - `VITE_API_BASE_URL` = `https://smartscribe-api.onrender.com`
+   - `VITE_GOOGLE_CLIENT_ID` = `<client-id>`
+5. Vercel auto-deploys on every push to `main`.
+
+#### Step 4 – API Communication Configuration
+- The React frontend calls the backend via the base URL stored in `VITE_API_BASE_URL`.
+- CORS is configured in [main.py](file:///d:/sem6/Computer%20EngeLab/SmartScribe/backend/main.py) using `CORSMiddleware` to allow the Vercel domain.
+- All protected routes use `Authorization: Bearer <JWT>` headers.
+
+#### Step 5 – Database Initialization
+- On first startup, `database.py → init_db()` is called automatically via `@app.on_event("startup")`.
+- Creates `users` and [essays](file:///d:/sem6/Computer%20EngeLab/SmartScribe/backend/main.py#167-170) tables in [smartscribe.db](file:///d:/sem6/Computer%20EngeLab/SmartScribe/smartscribe.db) on the Render server filesystem.
+
+---
+
+### C. Security Measures
+
+| Mechanism | Details |
+|-----------|---------|
+| **JWT Authentication** | All protected API routes (`/api/evaluate`, `/api/dashboard/*`, `/api/ask-ai`) require a valid JWT signed with `HS256` and a server-side `JWT_SECRET`. 24-hour token expiry. |
+| **Password Hashing** | User passwords are hashed with `bcrypt` (salted) before storage. Plain-text passwords are never stored. |
+| **Google OAuth Verification** | The Google access token sent by the user is verified server-side by calling `https://www.googleapis.com/oauth2/v3/userinfo`. The server never trusts client-side claims alone. |
+| **HTTPS (TLS)** | Both Vercel and Render enforce HTTPS by default — all data in transit is encrypted. |
+| **Environment Variables** | API keys, JWT secrets, and Google credentials are stored as server-side environment variables, never in source code. |
+| **CORS Restriction** | `CORSMiddleware` in FastAPI is configured to allow only the trusted Vercel frontend origin (not wildcard `*` in production). |
+
+---
+
+## II. How End Users Access the Services [10 Marks]
+
+### System Architecture Diagram
+
+![SmartScribe System Architecture](C:\Users\ps917\.gemini\antigravity\brain\cf8cf54c-ce24-480d-a655-4fae8aeaecd5\smartscribe_architecture_1773113676059.png)
+
+---
+
+### User & Component Interaction Diagram
+
+![SmartScribe User Interaction & Component Communication](C:\Users\ps917\.gemini\antigravity\brain\cf8cf54c-ce24-480d-a655-4fae8aeaecd5\smartscribe_user_interaction_1773113702228.png)
+
+---
+
+### Interaction Flow Description
+
+#### Flow 1 — User Authentication
+```
+User (Browser)
+  │── opens SmartScribe URL (Vercel CDN serves React SPA)
+  │── fills Login form / clicks "Sign in with Google"
+  │
+  ├─► [React Frontend] ──── POST /api/auth/login ──────► [FastAPI Backend]
+  │                              (username, password)          │
+  │                                                            ├─ verifies bcrypt hash
+  │                                                            ├─ generates JWT (HS256)
+  │                                                            └─► returns {access_token}
+  │
+  │◄── JWT stored in localStorage ──────────────────────────────
+  └── User is redirected to /evaluate
+```
+
+#### Flow 2 — Google OAuth Authentication
+```
+User clicks "Sign in with Google"
+  │
+  ├─► [Google OAuth Popup] ── user consents ──► Google returns access_token to Frontend
+  │
+  ├─► [React Frontend] ─── POST /api/auth/google ─────► [FastAPI Backend]
+  │                            {credential: access_token}        │
+  │                                                              ├─ calls googleapis.com/oauth2/v3/userinfo
+  │                                                              ├─ verifies token server-side
+  │                                                              ├─ creates/finds user in SQLite
+  │                                                              └─► returns {access_token (JWT)}
+  └── User logged in with JWT
+```
+
+#### Flow 3 — Essay Evaluation
+```
+User writes essay → clicks "Evaluate"
+  │
+  ├─► [React Frontend] ─── POST /api/evaluate ──────────► [FastAPI Backend: main.py]
+  │                         Authorization: Bearer <JWT>          │
+  │                         {title, content}                     │
+  │                                                              ├─ auth.get_current_user_id() ← validates JWT
+  │                                                              ├─ ai.get_ai_evaluation(title, content)
+  │                                                              │     └─► POST → OpenRouter LLM API
+  │                                                              │           └─► returns JSON scores
+  │                                                              ├─ db.save_essay() → SQLite INSERT
+  │                                                              └─► {grammar, coherence, argumentation, feedback}
+  └── Frontend renders score cards + AI feedback
+```
+
+#### Flow 4 — Dashboard
+```
+User navigates to Dashboard
+  │
+  ├─► [React Frontend] ─── GET /api/dashboard/stats ───► [FastAPI Backend]
+  │                         Authorization: Bearer <JWT>          │
+  │                                                              ├─ db.get_average_scores(user_id)
+  │                                                              ├─ db.get_user_essays(user_id)
+  │                                                              └─► {averages, recent_essays}
+  └── Frontend renders progress charts and essay history
+```
+
+---
+
+## III. Implementation of Application Components [10 Marks]
+
+> **Components Implemented:** (1) Authentication Module, (2) AI Evaluation Module, with clear API interaction between them and the Frontend.
+
+---
+
+### Component 1: Authentication Module ([auth.py](file:///d:/sem6/Computer%20EngeLab/SmartScribe/backend/auth.py) + `/api/auth/*`)
+
+**Responsibility:** Handles user registration, login, Google OAuth sign-in, and JWT generation/validation.
+
+**Key Implementation — [auth.py](file:///d:/sem6/Computer%20EngeLab/SmartScribe/backend/auth.py):**
+```python
+from jose import JWTError, jwt
+import bcrypt
+
+SECRET_KEY = os.getenv("JWT_SECRET", "supersecret-paper-ink-amber-key-2025")
+ALGORITHM  = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+
+def get_password_hash(password: str) -> str:
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return bcrypt.checkpw(plain_password.encode("utf-8"),
+                          hashed_password.encode("utf-8"))
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+async def get_current_user_id(token: str = Depends(oauth2_scheme)):
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    return int(payload.get("sub"))
+```
+
+**Key Implementation — Google OAuth route ([main.py](file:///d:/sem6/Computer%20EngeLab/SmartScribe/backend/main.py)):**
+```python
+@app.post("/api/auth/google")
+async def google_login(body: GoogleAuth):
+    # Server-side verification: call Google's userinfo endpoint
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {body.credential}"}
+        )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid Google token.")
+    
+    userinfo = resp.json()
+    # Find or create user → issue SmartScribe JWT
+    token = auth.create_access_token(data={"sub": str(uid)})
+    return {"access_token": token, "token_type": "bearer", ...}
+```
+
+**Interaction with other components:**
+- Interacts with **Database Module** ([database.py](file:///d:/sem6/Computer%20EngeLab/SmartScribe/backend/database.py)) to create/retrieve user records.
+- Issues **JWT tokens** consumed by all protected API endpoints.
+- Frontend (`Auth.jsx`) sends credentials here and stores the returned JWT in `localStorage`.
+
+---
+
+### Component 2: AI Evaluation Module ([ai.py](file:///d:/sem6/Computer%20EngeLab/SmartScribe/backend/ai.py) + `/api/evaluate`)
+
+**Responsibility:** Takes essay title and content, calls the OpenRouter LLM API, and returns structured scores (Grammar, Coherence, Argumentation) plus textual feedback.
+
+**Key Implementation — [ai.py](file:///d:/sem6/Computer%20EngeLab/SmartScribe/backend/ai.py):**
+```python
+from openai import OpenAI   # OpenAI-compatible client for OpenRouter
+
+def get_ai_evaluation(title, content):
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=OPENROUTER_API_KEY,
+    )
+    prompt = f"""You are an expert essay grader. Evaluate the following essay.
+Title: {title}
+Content: {content}
+
+Provide three scores (0-100) and feedback. Output EXACTLY as valid JSON:
+{{ "grammar": 85, "coherence": 78, "argumentation": 92, "feedback": "..." }}
+"""
+    response = client.chat.completions.create(
+        model="openrouter/auto",
+        messages=[{"role": "user", "content": prompt}],
+    )
+    text = response.choices[0].message.content
+    res = json.loads(re.search(r'\{.*\}', text, re.DOTALL).group(0))
+    overall = round((res["grammar"] + res["coherence"] + res["argumentation"]) / 3, 1)
+    return {...res, "overall": overall}
+```
+
+**Key Implementation — Evaluation Route ([main.py](file:///d:/sem6/Computer%20EngeLab/SmartScribe/backend/main.py)):**
+```python
+@app.post("/api/evaluate")
+async def evaluate_essay(
+    essay: EssaySubmit,
+    user_id: int = Depends(auth.get_current_user_id)   # JWT validation
+):
+    result = ai.get_ai_evaluation(essay.title, essay.content)  # AI call
+    
+    db.save_essay(                              # Persist to database
+        user_id=user_id,
+        title=essay.title,
+        content=essay.content,
+        grammar=result["grammar"],
+        coherence=result["coherence"],
+        argument=result["argumentation"],
+        overall=result["overall"],
+        feedback=result["feedback"]
+    )
+    return result
+```
+
+**Interaction with other components:**
+- **Auth Module** (`auth.get_current_user_id`) validates the JWT before evaluation is allowed.
+- **Database Module** (`db.save_essay`) persists results so the Dashboard can retrieve history.
+- **OpenRouter External API** is called to perform actual LLM inference.
+- **Frontend Evaluate View** (`Evaluate.jsx`) sends the essay and renders the returned score cards.
+
+---
+
+### Component Interaction Summary
+
+```
+Frontend (Evaluate.jsx)
+    │
+    │  POST /api/evaluate
+    │  Authorization: Bearer <JWT>
+    ▼
+FastAPI Backend (main.py → evaluate_essay)
+    │
+    ├── auth.get_current_user_id()  ──► validates JWT ──► returns user_id
+    │                                     [Auth Component]
+    │
+    ├── ai.get_ai_evaluation()      ──► OpenRouter API ──► JSON scores
+    │                                     [AI Component]
+    │
+    └── db.save_essay()             ──► SQLite INSERT
+                                          [Database Component]
+```
+
+---
+
+### Database Schema (Supporting Component)
+
+```sql
+-- users table
+CREATE TABLE users (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    username   TEXT    NOT NULL UNIQUE,
+    email      TEXT    NOT NULL UNIQUE,
+    password   TEXT    NOT NULL,        -- bcrypt hashed
+    full_name  TEXT    DEFAULT '',
+    created_at TEXT    DEFAULT (datetime('now'))
+);
+
+-- essays table
+CREATE TABLE essays (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL,
+    title           TEXT    DEFAULT 'Untitled Essay',
+    content         TEXT    NOT NULL,
+    grammar_score   REAL    DEFAULT 0,
+    coherence_score REAL    DEFAULT 0,
+    argument_score  REAL    DEFAULT 0,
+    overall_score   REAL    DEFAULT 0,
+    feedback        TEXT    DEFAULT '',
+    submitted_at    TEXT    DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+```
+
+---
+
+*End of Assignment 5 — SmartScribe*

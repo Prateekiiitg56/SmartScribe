@@ -267,7 +267,7 @@ const App = () => {
                     <span style={{ fontFamily: 'var(--serif)', fontWeight: 900, fontSize: '1.6rem', letterSpacing: '-0.03em' }}>SmartScribe.</span>
                 </div>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: '0.7rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.25em' }}>
-                    IIIT Guwahati · Computer Engineering Lab · 2025
+                    IIIT Guwahati · Computer Engineering Lab · 2026
                 </div>
                 <div style={{ display: 'flex', gap: '3rem', alignItems: 'center' }}>
                     <span style={{ fontFamily: 'var(--mono)', fontSize: '0.7rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Source Archive</span>

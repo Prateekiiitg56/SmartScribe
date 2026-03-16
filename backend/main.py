@@ -168,6 +168,13 @@ async def get_stats(user_id: int = Depends(auth.get_current_user_id)):
 async def get_all_essays(user_id: int = Depends(auth.get_current_user_id)):
     return db.get_user_essays(user_id)
 
+@app.delete("/api/essays/{essay_id}")
+async def delete_essay_endpoint(essay_id: int, user_id: int = Depends(auth.get_current_user_id)):
+    success = db.delete_essay(essay_id, user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Essay not found or unauthorized.")
+    return {"message": "Essay deleted successfully."}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
