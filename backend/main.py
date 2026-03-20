@@ -55,6 +55,7 @@ class EssaySubmit(BaseModel):
 class AskAI(BaseModel):
     question: str
     context: str
+    mode: str = "Standard"
 
 # --- Auth Routes ---
 @app.post("/api/auth/register")
@@ -150,7 +151,7 @@ async def evaluate_essay(essay: EssaySubmit, user_id: int = Depends(auth.get_cur
 # --- Ask AI Route ---
 @app.post("/api/ask-ai")
 async def ask_ai(req: AskAI, user_id: int = Depends(auth.get_current_user_id)):
-    response = ai.get_ai_chat(req.question, req.context)
+    response = ai.get_ai_chat(req.question, req.context, req.mode)
     return {"response": response}
 
 # --- Dashboard Routes ---
