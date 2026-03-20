@@ -18,11 +18,12 @@ export const apiCall = async (endpoint, options = {}) => {
     });
 
     if (response.status === 401) {
-        // Token is invalid or expired — clear everything and force re-login
+        // Token expired — clear storage and dispatch a clean logout event
         localStorage.removeItem("token");
         localStorage.removeItem("user");
-        window.location.reload();
-        return;
+        // Dispatch a custom event so App.jsx can handle it without a jarring reload
+        window.dispatchEvent(new CustomEvent("auth:logout"));
+        throw new Error("Session expired. Please log in again.");
     }
 
     if (!response.ok) {

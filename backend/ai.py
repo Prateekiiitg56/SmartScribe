@@ -208,7 +208,35 @@ def _heuristic_evaluation(title, content):
         "feedback": feedback
     }
 
-def get_ai_evaluation(title, content):
+def _academic_heuristics(text):
+    """Heuristic Academic-mode extras: plagiarism risk, citation score, originality."""
+    words = text.lower().split()
+    word_count = max(len(words), 1)
+
+    # --- Plagiarism Risk (0-100, lower is better) ---
+    # Proxy: repeated consecutive bigrams suggest copied/boilerplate text
+    bigrams = {}
+    for i in range(len(words) - 1):
+        bg = words[i] + ' ' + words[i + 1]
+        bigrams[bg] = bigrams.get(bg, 0) + 1
+    repeated = sum(1 for v in bigrams.values() if v > 1)
+    plagiarism_score = round(_clamp(repeated / max(len(bigrams), 1) * 120, 0, 100), 1)
+
+    # --- Citation Score (0-100) ---
+    citation_matches = re.findall(r'\([A-Z][a-zA-Z]+,?\s*\d{4}\)', text)
+    citation_score = round(_clamp(len(citation_matches) * 18, 0, 100), 1)
+
+    # --- Originality Index (0-100) ---
+    unique_ratio = len(set(words)) / word_count
+    originality_score = round(_clamp(unique_ratio * 140, 0, 100), 1)
+
+    return {
+        "plagiarism_score":  plagiarism_score,
+        "citation_score":    citation_score,
+        "originality_score": originality_score,
+    }
+
+def get_ai_evaluation(title, content, mode="Standard"):
     heuristic = _heuristic_evaluation(title, content)
     # Add transformer score
     try:
@@ -225,7 +253,30 @@ def get_ai_evaluation(title, content):
     heuristic["coherence_transformer"] = coherence_score
 
     if not OPENROUTER_API_KEY:
+        if mode == "Academic":
+            heuristic.update(_academic_heuristics(content or ""))
         return heuristic
+
+    # Academic server-side heuristics (always computed for Academic mode)
+    academic_extras = {}
+    if mode == "Academic":
+        academic_extras = _academic_heuristics(content or "")
+        heuristic.update(academic_extras)
+
+    # Define mode-specific instructions
+    mode_instructions = {
+        "Standard": "Evaluate with a balanced mix of grammar, coherence, and argumentation.",
+        "Professional": "Evaluate with a strict focus on formal tone, professional vocabulary, and structural integrity. Be rigorous with grammar.",
+        "Creative": "Focus on narrative flow, richness of language, and creativity. Be more lenient with traditional structure if the flow is compelling.",
+        "Academic": (
+            "Evaluate based on logical consistency, depth of reasoning, and evidentiary support. "
+            "Focus on how well the arguments are constructed, whether claims are supported by evidence, "
+            "and the presence of proper academic citations like (Author, Year). "
+            "Also assess originality and flag any suspiciously generic or repeated passages."
+        )
+    }
+
+    instruction = mode_instructions.get(mode, mode_instructions["Standard"])
 
     try:
         client = OpenAI(
@@ -233,20 +284,31 @@ def get_ai_evaluation(title, content):
             api_key=OPENROUTER_API_KEY,
         )
         
-        prompt = f"""You are an expert essay grader. Evaluate the following essay.
+        academic_json_extra = ""
+        if mode == "Academic":
+            academic_json_extra = """
+  "plagiarism_risk": 8,
+  "citation_quality": 65,
+  "originality": 82,"""
+
+        prompt = f"""You are an expert essay grader evaluating under the '{mode}' mode.
+{instruction}
+
 Title: {title}
 Content: {content}
 
-Provide three scores (0-100) for:
+Provide three core scores (0-100) for:
 1. Grammar
 2. Coherence
 3. Argumentation
+{'Also estimate (0-100) plagiarism_risk (higher = more plagiarised), citation_quality, and originality.' if mode == 'Academic' else ''}
 
-Provide detailed feedback. Output EXACTLY as valid JSON.
+Provide detailed feedback specifically targeting the {mode} criteria.
+Output EXACTLY as valid JSON:
 {{
   "grammar": 85,
   "coherence": 78,
-  "argumentation": 92,
+  "argumentation": 92,{academic_json_extra}
   "feedback": "..."
 }}
 """
@@ -263,12 +325,30 @@ Provide detailed feedback. Output EXACTLY as valid JSON.
             c_ai = float(res.get("coherence", 80))
             a_ai = float(res.get("argumentation", 80))
 
-            g = round(_clamp(g_ai * 0.7 + heuristic["grammar"] * 0.3), 1)
-            c = round(_clamp(c_ai * 0.7 + heuristic["coherence"] * 0.3), 1)
-            a = round(_clamp(a_ai * 0.7 + heuristic["argumentation"] * 0.3), 1)
+            g = round(_clamp(g_ai * 0.70 + heuristic["grammar"] * 0.30), 1)
+            c = round(_clamp(c_ai * 0.70 + heuristic["coherence"] * 0.30), 1)
+            a = round(_clamp(a_ai * 0.70 + heuristic["argumentation"] * 0.30), 1)
+            
+            # Weighted overall based on mode
+            if mode == "Creative":
+                o = round(g * 0.2 + c * 0.4 + a * 0.4, 1)
+            elif mode == "Professional":
+                o = round(g * 0.4 + c * 0.4 + a * 0.2, 1)
+            elif mode == "Academic":
+                o = round(g * 0.2 + c * 0.3 + a * 0.5, 1)
+            else:
+                o = round((g + c + a) / 3, 1)
+
             fb = res.get("feedback", "Excellent draft.")
-            o = round((g + c + a) / 3, 1)
-            return {"grammar": g, "coherence": c, "argumentation": a, "overall": o, "feedback": fb}
+            final = {"grammar": g, "coherence": c, "argumentation": a, "overall": o, "feedback": fb}
+
+            # Merge Academic extras from LLM (fallback to heuristic)
+            if mode == "Academic":
+                final["plagiarism_score"]  = round(_clamp(float(res.get("plagiarism_risk",  academic_extras.get("plagiarism_score", 10))), 0, 100), 1)
+                final["citation_score"]    = round(_clamp(float(res.get("citation_quality", academic_extras.get("citation_score", 30))), 0, 100), 1)
+                final["originality_score"] = round(_clamp(float(res.get("originality",      academic_extras.get("originality_score", 70))), 0, 100), 1)
+
+            return final
 
         return heuristic
         

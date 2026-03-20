@@ -222,6 +222,14 @@ const App = () => {
         if (storedUser && token) {
             setUser(JSON.parse(storedUser));
         }
+
+        // Listen for session expiry from api.js
+        const handleAuthLogout = () => {
+            setUser(null);
+            setActivePage('login');
+        };
+        window.addEventListener('auth:logout', handleAuthLogout);
+        return () => window.removeEventListener('auth:logout', handleAuthLogout);
     }, []);
 
     useEffect(() => {
