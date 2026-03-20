@@ -50,6 +50,7 @@ class GoogleAuth(BaseModel):
 class EssaySubmit(BaseModel):
     title: str
     content: str
+    mode: str = "Standard"
 
 class AskAI(BaseModel):
     question: str
@@ -131,7 +132,7 @@ async def google_login(body: GoogleAuth):
 # --- Evaluation Routes ---
 @app.post("/api/evaluate")
 async def evaluate_essay(essay: EssaySubmit, user_id: int = Depends(auth.get_current_user_id)):
-    result = ai.get_ai_evaluation(essay.title, essay.content)
+    result = ai.get_ai_evaluation(essay.title, essay.content, essay.mode)
 
     essay_id = db.save_essay(
         user_id=user_id,
