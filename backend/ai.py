@@ -356,24 +356,54 @@ Output EXACTLY as valid JSON:
         print(f"AI Error: {e}")
         return heuristic
 
-def get_ai_chat(question, context):
+def get_ai_chat(question, context, mode="Standard"):
+    # Mode-specific AI chat personas
+    chat_personas = {
+        "Standard": (
+            "You are a balanced writing coach. Help the user improve their essay with clear, "
+            "practical advice covering grammar, structure, and argument quality."
+        ),
+        "Creative": (
+            "You are a creative writing mentor with a passion for narrative and expression. "
+            "When reviewing the user's essay, focus on the richness of language, the flow of ideas, "
+            "the emotional resonance, and opportunities to be more vivid or original. "
+            "Be encouraging and inspiring."
+        ),
+        "Professional": (
+            "You are a strict professional writing editor. Focus on formal tone, precision of language, "
+            "correct business/academic vocabulary, structural integrity, and the elimination of informal "
+            "or colloquial expressions. Be direct and concise in your feedback."
+        ),
+        "Academic": (
+            "You are a senior academic reviewer. When answering the user's question, focus on the strength "
+            "of their argument, the quality of evidence and citations, logical consistency, and scholarly "
+            "depth. Point out unsupported claims, suggest where citations could be added (e.g., Author, Year), "
+            "and highlight any logical fallacies or weaknesses in reasoning."
+        ),
+    }
+
+    persona = chat_personas.get(mode, chat_personas["Standard"])
+
     if not OPENROUTER_API_KEY:
-        return f"AI simulation: I received your question about the content. (OpenRouter key missing)"
+        return (
+            f"[{mode} mode] AI simulation: Your question has been received. "
+            f"(OpenRouter key missing — add OPENROUTER_API_KEY to .env to enable real AI responses.)"
+        )
 
     try:
         client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=OPENROUTER_API_KEY,
         )
-        
-        prompt = f"""You are a helpful writing assistant. Answer the user's question about their essay.
-Current Essay Content: {context}
 
-User Question: {question}
-"""
+        system_prompt = f"{persona}\n\nThe user's current essay:\n\"\"\"\n{context}\n\"\"\""
+
         response = client.chat.completions.create(
             model="openrouter/auto",
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": question},
+            ],
         )
         return response.choices[0].message.content
     except Exception as e:
