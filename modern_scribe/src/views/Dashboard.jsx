@@ -57,7 +57,7 @@ const Modal = ({ essay, onClose, onDelete, onDownload, isDeleting }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(7,8,10,0.95)', backdropFilter: 'blur(10px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--overlay)', backdropFilter: 'blur(10px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}
             onClick={onClose}
         >
             <motion.div
@@ -95,7 +95,7 @@ const Modal = ({ essay, onClose, onDelete, onDownload, isDeleting }) => {
                 <div style={{ overflowY: 'auto', padding: '2.5rem', display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '3rem' }}>
                     <div>
                         <h4 style={{ fontFamily: 'var(--mono)', fontSize: '0.6rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1.5rem' }}>Full Content</h4>
-                        <div style={{ fontSize: '1rem', lineHeight: 1.8, whiteSpace: 'pre-wrap', color: 'rgba(240,235,224,0.8)', fontFamily: 'var(--serif)' }}>
+                        <div style={{ fontSize: '1rem', lineHeight: 1.8, whiteSpace: 'pre-wrap', color: 'var(--text-soft)', fontFamily: 'var(--serif)' }}>
                             {essay.content}
                         </div>
                     </div>

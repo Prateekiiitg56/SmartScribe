@@ -7,9 +7,31 @@
   --paper: #f0ebe0;
   --muted: #5a5650;
   --border: rgba(212, 130, 10, 0.15);
+  --text-soft: rgba(240, 235, 224, 0.7);
+  --text-dim: rgba(240, 235, 224, 0.5);
+  --surface-soft: rgba(255, 255, 255, 0.04);
+  --nav-bg-solid: rgba(7, 8, 10, 0.98);
+  --nav-bg-gradient: linear-gradient(to bottom, rgba(7, 8, 10, 0.9) 0%, rgba(7, 8, 10, 0) 100%);
+  --footer-bg: rgba(7, 8, 10, 0.8);
+  --overlay: rgba(7, 8, 10, 0.95);
   --serif: 'Playfair Display', Georgia, serif;
   --mono: 'DM Mono', monospace;
   --body: 'Literata', Georgia, serif;
+}
+
+[data-theme="light"] {
+  --ink: #f7f2e8;
+  --ink2: #fffaf2;
+  --paper: #1c1710;
+  --muted: #776a58;
+  --border: rgba(122, 74, 6, 0.18);
+  --text-soft: rgba(28, 23, 16, 0.76);
+  --text-dim: rgba(28, 23, 16, 0.58);
+  --surface-soft: rgba(122, 74, 6, 0.08);
+  --nav-bg-solid: rgba(247, 242, 232, 0.97);
+  --nav-bg-gradient: linear-gradient(to bottom, rgba(247, 242, 232, 0.96) 0%, rgba(247, 242, 232, 0) 100%);
+  --footer-bg: rgba(247, 242, 232, 0.85);
+  --overlay: rgba(247, 242, 232, 0.9);
 }
 
 * {
@@ -35,7 +57,7 @@ body::before {
   right: 0;
   bottom: 0;
   background:
-    radial-gradient(circle at 50% 50%, transparent 0%, rgba(7, 8, 10, 0.4) 100%),
+    radial-gradient(circle at 50% 50%, transparent 0%, color-mix(in srgb, var(--ink) 40%, transparent) 100%),
     url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
   opacity: 0.03;
   pointer-events: none;
@@ -60,14 +82,14 @@ button {
 
 /* Glassmorphism Classes */
 .glass {
-  background: rgba(14, 15, 18, 0.7);
+  background: color-mix(in srgb, var(--ink2) 80%, transparent);
   backdrop-filter: blur(30px);
   border: 1px solid var(--border);
 }
 
 .glass-card {
   border: 1px solid var(--border);
-  background: linear-gradient(135deg, rgba(212, 130, 10, 0.02) 0%, rgba(14, 15, 18, 0.8) 100%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--amber) 8%, transparent) 0%, color-mix(in srgb, var(--ink2) 82%, transparent) 100%);
   transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
