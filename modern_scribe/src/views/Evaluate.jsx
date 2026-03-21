@@ -716,7 +716,7 @@ const ModernEvaluate = () => {
                 >
                     {chatOpen ? <X size={20} /> : <MessageSquare size={20} />}
                     {chatHistory.length > 0 && !chatOpen && (
-                        <div style={{ position: 'absolute', top: -2, right: -2, width: 14, height: 14, borderRadius: '50%', background: '#6ECB8A', border: '2px solid #07080a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--mono)', fontSize: '0.45rem', color: '#000', fontWeight: 900 }}>
+                        <div style={{ position: 'absolute', top: -2, right: -2, width: 14, height: 14, borderRadius: '50%', background: '#6ECB8A', border: '2px solid var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--mono)', fontSize: '0.45rem', color: '#000', fontWeight: 900 }}>
                             {chatHistory.filter(m => m.role === 'ai').length}
                         </div>
                     )}

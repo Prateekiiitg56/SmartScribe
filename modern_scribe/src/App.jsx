@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Github } from 'lucide-react';
+import { Github, Moon, Sun } from 'lucide-react';
 import Hero3D from './components/Hero3D';
 import Evaluate from './views/Evaluate';
 import Dashboard from './views/Dashboard';
 import Auth from './views/Auth';
 import './index.css';
 
-const Navbar = ({ activePage, setActivePage, user, onLogout }) => {
+const Navbar = ({ activePage, setActivePage, user, onLogout, theme, onToggleTheme }) => {
     const [scrolled, setScrolled] = useState(false);
 
     useEffect(() => {
@@ -36,7 +36,7 @@ const Navbar = ({ activePage, setActivePage, user, onLogout }) => {
         alignItems: 'center',
         justifyContent: 'space-between',
         transition: 'all 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
-        background: scrolled ? 'rgba(7, 8, 10, 0.98)' : 'linear-gradient(to bottom, rgba(7, 8, 10, 0.9) 0%, rgba(7, 8, 10, 0) 100%)',
+        background: scrolled ? 'var(--nav-bg-solid)' : 'var(--nav-bg-gradient)',
         backdropFilter: scrolled ? 'blur(20px)' : 'none',
         borderBottom: scrolled ? '1px solid var(--border)' : '1px solid transparent'
     };
@@ -65,7 +65,7 @@ const Navbar = ({ activePage, setActivePage, user, onLogout }) => {
                                 background: 'transparent',
                                 border: 'none',
                                 cursor: 'pointer',
-                                color: activePage === item.id ? 'var(--amber2)' : 'rgba(240,235,224,0.5)',
+                                color: activePage === item.id ? 'var(--amber2)' : 'var(--text-dim)',
                                 transition: 'all 0.4s',
                                 position: 'relative',
                                 padding: '0.5rem 0'
@@ -82,6 +82,43 @@ const Navbar = ({ activePage, setActivePage, user, onLogout }) => {
                     ))}
                 </div>
 
+                <button
+                    onClick={onToggleTheme}
+                    title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem',
+                        padding: '0 1rem',
+                        height: 38,
+                        borderRadius: '100px',
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface-soft)',
+                        color: 'var(--paper)',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s',
+                        fontFamily: 'var(--mono)',
+                        fontSize: '0.65rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.1em'
+                    }}
+                >
+                    {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+                    <AnimatePresence mode="wait">
+                        <motion.span
+                            key={theme}
+                            initial={{ opacity: 0, y: -5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 5 }}
+                            transition={{ duration: 0.2 }}
+                            style={{ display: 'inline-block' }}
+                        >
+                            {theme === 'dark' ? 'Dark' : 'Light'}
+                        </motion.span>
+                    </AnimatePresence>
+                </button>
+
                 {user ? (
                     <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', borderLeft: '1px solid var(--border)', paddingLeft: '2rem' }}>
                         <span style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', color: 'var(--paper)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{user.fullName || 'User'}</span>
@@ -90,7 +127,7 @@ const Navbar = ({ activePage, setActivePage, user, onLogout }) => {
                             style={{
                                 fontFamily: 'var(--mono)',
                                 fontSize: '0.65rem',
-                                color: 'rgba(240,235,224,0.6)',
+                                color: 'var(--text-soft)',
                                 background: 'transparent',
                                 border: '1px solid var(--border)',
                                 padding: '0.6rem 1.2rem',
@@ -171,7 +208,7 @@ const HomeView = ({ setActivePage }) => (
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.4, duration: 1 }}
-                    style={{ fontSize: '1.2rem', fontWeight: 300, color: 'rgba(240,235,224,0.7)', maxWidth: 600, margin: '3rem 0 4rem', lineHeight: 1.8, fontFamily: 'var(--body)' }}
+                    style={{ fontSize: '1.2rem', fontWeight: 300, color: 'var(--text-soft)', maxWidth: 600, margin: '3rem 0 4rem', lineHeight: 1.8, fontFamily: 'var(--body)' }}
                 >
                     SmartScribe uses AI to check your grammar, flow, and coherence — providing detailed feedback in seconds.
                 </motion.p>
@@ -215,6 +252,11 @@ const HomeView = ({ setActivePage }) => (
 const App = () => {
     const [activePage, setActivePage] = useState('home');
     const [user, setUser] = useState(null);
+    const [theme, setTheme] = useState(() => {
+        const storedTheme = localStorage.getItem('theme');
+        if (storedTheme === 'dark' || storedTheme === 'light') return storedTheme;
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    });
 
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
@@ -236,6 +278,11 @@ const App = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }, [activePage]);
 
+    useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+    }, [theme]);
+
     const handleAuthSuccess = (data) => {
         setUser({ username: data.username, fullName: data.fullName });
         setActivePage('dashboard');
@@ -248,9 +295,13 @@ const App = () => {
         setActivePage('home');
     };
 
+    const handleToggleTheme = () => {
+        setTheme((previousTheme) => (previousTheme === 'dark' ? 'light' : 'dark'));
+    };
+
     return (
         <div style={{ background: 'var(--ink)', minHeight: '100vh', position: 'relative' }}>
-            <Navbar activePage={activePage} setActivePage={setActivePage} user={user} onLogout={handleLogout} />
+            <Navbar activePage={activePage} setActivePage={setActivePage} user={user} onLogout={handleLogout} theme={theme} onToggleTheme={handleToggleTheme} />
 
             <main>
                 <AnimatePresence mode="wait">
@@ -269,7 +320,7 @@ const App = () => {
                 </AnimatePresence>
             </main>
 
-            <footer style={{ borderTop: '1px solid var(--border)', padding: '6rem 8%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(7,8,10,0.8)' }}>
+            <footer style={{ borderTop: '1px solid var(--border)', padding: '6rem 8%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--footer-bg)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
                     <div style={{ width: 10, height: 10, background: 'var(--amber)', borderRadius: '50%' }} />
                     <span style={{ fontFamily: 'var(--serif)', fontWeight: 900, fontSize: '1.6rem', letterSpacing: '-0.03em' }}>SmartScribe.</span>
