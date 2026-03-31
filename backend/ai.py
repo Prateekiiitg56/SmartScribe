@@ -1,71 +1,164 @@
-from transformers import pipeline
-# Load sentiment pipeline once (global)
-_sentiment_pipe = None
-def _load_sentiment_pipe():
-    global _sentiment_pipe
-    if _sentiment_pipe is None:
-        _sentiment_pipe = pipeline("sentiment-analysis")
-
-def transformer_sentiment_score(text):
-    _load_sentiment_pipe()
-    try:
-        result = _sentiment_pipe(text[:512])[0]
-        # Map 'POSITIVE' to 100, 'NEGATIVE' to 0, weighted by score
-        if result['label'] == 'POSITIVE':
-            return min(100, int(result['score'] * 100))
-        else:
-            return max(0, 100 - int(result['score'] * 100))
-    except Exception:
-        return 50
-
-# Coherence: use sentence embedding variance as proxy
-def transformer_coherence_score(text):
-    _load_hf_model()
-    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
-    if len(sentences) < 2:
-        return 40
-    embs = []
-    for s in sentences:
-        inputs = _hf_tokenizer(s, return_tensors="pt", truncation=True, max_length=64)
-        with torch.no_grad():
-            outputs = _hf_model(**inputs)
-            embs.append(outputs.last_hidden_state[:, 0, :].squeeze().numpy())
-    # Coherence: lower variance between sentence embeddings = higher coherence
-    import numpy as np
-    emb_matrix = np.stack(embs)
-    variance = np.mean(np.std(emb_matrix, axis=0))
-    score = max(0, 100 - variance * 10)
-    return min(score, 100)
-from transformers import AutoTokenizer, AutoModel
+import os
+import json
+import re
+import numpy as np
 import torch
+from transformers import pipeline, AutoTokenizer, AutoModel
+from openai import OpenAI
+from dotenv import load_dotenv
 
-# Load model and tokenizer once (global)
-_HF_MODEL_NAME = "distilbert-base-uncased"
+# Stronger embedding model for semantic similarity and coherence
+_HF_MODEL_NAME = os.getenv("HF_EMBEDDING_MODEL", "sentence-transformers/all-mpnet-base-v2")
+_SENTIMENT_MODEL_NAME = os.getenv("HF_SENTIMENT_MODEL", "distilbert-base-uncased-finetuned-sst-2-english")
+_MAX_SENTENCES_FOR_EMBED = int(os.getenv("HF_MAX_SENTENCES", "24"))
+
 _hf_tokenizer = None
 _hf_model = None
+_sentiment_pipe = None
+
 
 def _load_hf_model():
     global _hf_tokenizer, _hf_model
     if _hf_tokenizer is None or _hf_model is None:
         _hf_tokenizer = AutoTokenizer.from_pretrained(_HF_MODEL_NAME)
         _hf_model = AutoModel.from_pretrained(_HF_MODEL_NAME)
+        _hf_model.eval()
+
+
+def _load_sentiment_pipe():
+    global _sentiment_pipe
+    if _sentiment_pipe is None:
+        _sentiment_pipe = pipeline("sentiment-analysis", model=_SENTIMENT_MODEL_NAME)
+
+
+def _split_sentences(text):
+    return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text or "") if s.strip()]
+
+
+def _mean_pool(last_hidden_state, attention_mask):
+    token_embeddings = last_hidden_state
+    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, dim=1)
+    sum_mask = torch.clamp(input_mask_expanded.sum(dim=1), min=1e-9)
+    return sum_embeddings / sum_mask
+
+
+def _embed_texts(texts, max_length=192):
+    if not texts:
+        return np.empty((0, 1), dtype=np.float32)
+    _load_hf_model()
+    encoded = _hf_tokenizer(
+        texts,
+        padding=True,
+        truncation=True,
+        max_length=max_length,
+        return_tensors="pt",
+    )
+    with torch.no_grad():
+        outputs = _hf_model(**encoded)
+    pooled = _mean_pool(outputs.last_hidden_state, encoded["attention_mask"])
+    vectors = pooled.detach().cpu().numpy()
+    norms = np.linalg.norm(vectors, axis=1, keepdims=True) + 1e-9
+    return vectors / norms
+
+
+def _cosine_similarity(a, b):
+    return float(np.dot(a, b) / ((np.linalg.norm(a) * np.linalg.norm(b)) + 1e-9))
+
+
+def transformer_sentiment_score(text):
+    _load_sentiment_pipe()
+    try:
+        sentences = _split_sentences(text)
+        if not sentences:
+            return 50.0
+
+        chunks = []
+        current = []
+        current_len = 0
+        for sentence in sentences[:12]:
+            if current_len + len(sentence) > 350 and current:
+                chunks.append(" ".join(current))
+                current = [sentence]
+                current_len = len(sentence)
+            else:
+                current.append(sentence)
+                current_len += len(sentence)
+        if current:
+            chunks.append(" ".join(current))
+
+        preds = _sentiment_pipe(chunks)
+        sentiment_values = []
+        confidences = []
+        for pred in preds:
+            label = str(pred.get("label", "")).upper()
+            confidence = float(pred.get("score", 0.5))
+            if "POS" in label:
+                sentiment_values.append(1.0)
+            elif "NEG" in label:
+                sentiment_values.append(0.0)
+            else:
+                sentiment_values.append(0.5)
+            confidences.append(confidence)
+
+        avg_sentiment = float(np.mean(sentiment_values))
+        avg_confidence = float(np.mean(confidences))
+
+        balance_component = max(0.0, 1.0 - abs(avg_sentiment - 0.5) * 2.0)
+        score = 60.0 + 25.0 * balance_component + 15.0 * avg_confidence
+        return round(max(0.0, min(100.0, score)), 1)
+    except Exception:
+        return 50.0
+
+
+def transformer_coherence_score(text):
+    sentences = _split_sentences(text)
+    if len(sentences) < 3:
+        return 42.0
+
+    sampled = sentences[:_MAX_SENTENCES_FOR_EMBED]
+    embeddings = _embed_texts(sampled, max_length=160)
+    if len(embeddings) < 3:
+        return 45.0
+
+    adjacent_sims = [_cosine_similarity(embeddings[i], embeddings[i + 1]) for i in range(len(embeddings) - 1)]
+    avg_adj = float(np.mean(adjacent_sims))
+    std_adj = float(np.std(adjacent_sims))
+    abrupt_jumps = sum(1 for s in adjacent_sims if s < 0.15)
+
+    base = 40.0 + 70.0 * max(0.0, min(1.0, (avg_adj - 0.2) / 0.65))
+    stability_penalty = min(std_adj * 35.0, 20.0)
+    jump_penalty = min(abrupt_jumps * 4.0, 16.0)
+
+    return round(max(0.0, min(100.0, base - stability_penalty - jump_penalty)), 1)
+
 
 def transformer_semantic_score(text):
-    _load_hf_model()
-    inputs = _hf_tokenizer(text, return_tensors="pt", truncation=True, max_length=256)
-    with torch.no_grad():
-        outputs = _hf_model(**inputs)
-        # Use [CLS] token embedding (first token)
-        cls_emb = outputs.last_hidden_state[:, 0, :].squeeze().numpy()
-    # Simple scoring: length, mean, std of embedding
-    score = float(abs(cls_emb).mean()) + float(abs(cls_emb).std())
-    # Normalize to 0-100
-    return min(max(score * 10, 0), 100)
-import os
-import json
-import re
-from openai import OpenAI
-from dotenv import load_dotenv
+    sentences = _split_sentences(text)
+    if len(sentences) < 2:
+        return 45.0
+
+    sampled = sentences[:_MAX_SENTENCES_FOR_EMBED]
+    embeddings = _embed_texts(sampled, max_length=192)
+    if len(embeddings) < 2:
+        return 48.0
+
+    centroid = embeddings.mean(axis=0)
+    centroid = centroid / (np.linalg.norm(centroid) + 1e-9)
+
+    focus_scores = [_cosine_similarity(vec, centroid) for vec in embeddings]
+    focus_mean = float(np.mean(focus_scores))
+
+    pairwise_sims = []
+    for i in range(len(embeddings) - 2):
+        pairwise_sims.append(_cosine_similarity(embeddings[i], embeddings[i + 2]))
+
+    diversity = 1.0 - (float(np.mean(pairwise_sims)) if pairwise_sims else focus_mean)
+    focus_component = 45.0 + 55.0 * max(0.0, min(1.0, (focus_mean - 0.2) / 0.75))
+    diversity_component = 100.0 - min(abs(diversity - 0.35) * 170.0, 45.0)
+
+    score = 0.7 * focus_component + 0.3 * diversity_component
+    return round(max(0.0, min(100.0, score)), 1)
 
 load_dotenv()
 
@@ -247,8 +340,8 @@ def get_ai_evaluation(title, content, mode="Standard"):
         tf_score = 50.0
         sentiment_score = 50.0
         coherence_score = 50.0
-    # Blend transformer score into overall
-    heuristic["overall"] = round((heuristic["overall"] * 0.5 + tf_score * 0.2 + sentiment_score * 0.15 + coherence_score * 0.15), 1)
+    # Blend transformer scores into overall (coherence/semantic weighted higher than sentiment)
+    heuristic["overall"] = round((heuristic["overall"] * 0.55 + tf_score * 0.22 + coherence_score * 0.18 + sentiment_score * 0.05), 1)
     heuristic["sentiment"] = sentiment_score
     heuristic["coherence_transformer"] = coherence_score
 
