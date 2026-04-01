@@ -8,9 +8,9 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 # Stronger embedding model for semantic similarity and coherence
-_HF_MODEL_NAME = os.getenv("HF_EMBEDDING_MODEL", "sentence-transformers/all-mpnet-base-v2")
-_SENTIMENT_MODEL_NAME = os.getenv("HF_SENTIMENT_MODEL", "distilbert-base-uncased-finetuned-sst-2-english")
-_MAX_SENTENCES_FOR_EMBED = int(os.getenv("HF_MAX_SENTENCES", "24"))
+_HF_MODEL_NAME = os.getenv("HF_EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
+_SENTIMENT_MODEL_NAME = os.getenv("HF_SENTIMENT_MODEL", "cardiffnlp/twitter-roberta-base-sentiment-latest")
+_MAX_SENTENCES_FOR_EMBED = int(os.getenv("HF_MAX_SENTENCES", "32"))
 
 _hf_tokenizer = None
 _hf_model = None
@@ -43,7 +43,7 @@ def _mean_pool(last_hidden_state, attention_mask):
     return sum_embeddings / sum_mask
 
 
-def _embed_texts(texts, max_length=192):
+def _embed_texts(texts, max_length=224):
     if not texts:
         return np.empty((0, 1), dtype=np.float32)
     _load_hf_model()
@@ -76,8 +76,8 @@ def transformer_sentiment_score(text):
         chunks = []
         current = []
         current_len = 0
-        for sentence in sentences[:12]:
-            if current_len + len(sentence) > 350 and current:
+        for sentence in sentences[:18]:
+            if current_len + len(sentence) > 400 and current:
                 chunks.append(" ".join(current))
                 current = [sentence]
                 current_len = len(sentence)
@@ -91,11 +91,11 @@ def transformer_sentiment_score(text):
         sentiment_values = []
         confidences = []
         for pred in preds:
-            label = str(pred.get("label", "")).upper()
+            label = str(pred.get("label", "")).lower()
             confidence = float(pred.get("score", 0.5))
-            if "POS" in label:
+            if "positive" in label or "pos" in label:
                 sentiment_values.append(1.0)
-            elif "NEG" in label:
+            elif "negative" in label or "neg" in label:
                 sentiment_values.append(0.0)
             else:
                 sentiment_values.append(0.5)
@@ -103,9 +103,11 @@ def transformer_sentiment_score(text):
 
         avg_sentiment = float(np.mean(sentiment_values))
         avg_confidence = float(np.mean(confidences))
+        sentiment_variance = float(np.std(sentiment_values))
 
-        balance_component = max(0.0, 1.0 - abs(avg_sentiment - 0.5) * 2.0)
-        score = 60.0 + 25.0 * balance_component + 15.0 * avg_confidence
+        balance_component = max(0.0, 1.0 - abs(avg_sentiment - 0.5) * 1.8)
+        consistency_bonus = max(0.0, 1.0 - sentiment_variance * 1.5) * 8.0
+        score = 58.0 + 28.0 * balance_component + 18.0 * avg_confidence + consistency_bonus
         return round(max(0.0, min(100.0, score)), 1)
     except Exception:
         return 50.0
@@ -117,20 +119,29 @@ def transformer_coherence_score(text):
         return 42.0
 
     sampled = sentences[:_MAX_SENTENCES_FOR_EMBED]
-    embeddings = _embed_texts(sampled, max_length=160)
+    embeddings = _embed_texts(sampled, max_length=192)
     if len(embeddings) < 3:
         return 45.0
 
     adjacent_sims = [_cosine_similarity(embeddings[i], embeddings[i + 1]) for i in range(len(embeddings) - 1)]
     avg_adj = float(np.mean(adjacent_sims))
     std_adj = float(np.std(adjacent_sims))
-    abrupt_jumps = sum(1 for s in adjacent_sims if s < 0.15)
+    
+    # Count very low similarities (abrupt topic changes)
+    abrupt_jumps = sum(1 for s in adjacent_sims if s < 0.12)
+    # Count strong transitions (very high similarity might indicate redundancy)
+    redundant_transitions = sum(1 for s in adjacent_sims if s > 0.92)
+    
+    # Improved base score calculation with better scaling
+    base = 45.0 + 65.0 * max(0.0, min(1.0, (avg_adj - 0.15) / 0.7))
+    
+    # Penalties for instability and issues
+    stability_penalty = min(std_adj * 30.0, 18.0)
+    jump_penalty = min(abrupt_jumps * 5.5, 20.0)
+    redundancy_penalty = min(redundant_transitions * 3.0, 12.0)
 
-    base = 40.0 + 70.0 * max(0.0, min(1.0, (avg_adj - 0.2) / 0.65))
-    stability_penalty = min(std_adj * 35.0, 20.0)
-    jump_penalty = min(abrupt_jumps * 4.0, 16.0)
-
-    return round(max(0.0, min(100.0, base - stability_penalty - jump_penalty)), 1)
+    score = base - stability_penalty - jump_penalty - redundancy_penalty
+    return round(max(0.0, min(100.0, score)), 1)
 
 
 def transformer_semantic_score(text):
@@ -139,7 +150,7 @@ def transformer_semantic_score(text):
         return 45.0
 
     sampled = sentences[:_MAX_SENTENCES_FOR_EMBED]
-    embeddings = _embed_texts(sampled, max_length=192)
+    embeddings = _embed_texts(sampled, max_length=224)
     if len(embeddings) < 2:
         return 48.0
 
@@ -148,16 +159,26 @@ def transformer_semantic_score(text):
 
     focus_scores = [_cosine_similarity(vec, centroid) for vec in embeddings]
     focus_mean = float(np.mean(focus_scores))
+    focus_std = float(np.std(focus_scores))
 
+    # Pairwise similarities for diversity assessment
     pairwise_sims = []
     for i in range(len(embeddings) - 2):
         pairwise_sims.append(_cosine_similarity(embeddings[i], embeddings[i + 2]))
-
+    
+    # Calculate topic diversity (not too similar, not too different)
     diversity = 1.0 - (float(np.mean(pairwise_sims)) if pairwise_sims else focus_mean)
-    focus_component = 45.0 + 55.0 * max(0.0, min(1.0, (focus_mean - 0.2) / 0.75))
-    diversity_component = 100.0 - min(abs(diversity - 0.35) * 170.0, 45.0)
+    
+    # Improved focus component with better thresholds
+    focus_component = 50.0 + 60.0 * max(0.0, min(1.0, (focus_mean - 0.18) / 0.72))
+    
+    # Diversity should be moderate (around 0.3-0.4 is ideal)
+    diversity_component = 100.0 - min(abs(diversity - 0.32) * 150.0, 42.0)
+    
+    # Consistency bonus: lower standard deviation in focus scores means better topic consistency
+    consistency_bonus = max(0.0, (0.25 - focus_std) * 20.0)
 
-    score = 0.7 * focus_component + 0.3 * diversity_component
+    score = 0.68 * focus_component + 0.28 * diversity_component + 0.04 * consistency_bonus
     return round(max(0.0, min(100.0, score)), 1)
 
 load_dotenv()
@@ -340,8 +361,8 @@ def get_ai_evaluation(title, content, mode="Standard"):
         tf_score = 50.0
         sentiment_score = 50.0
         coherence_score = 50.0
-    # Blend transformer scores into overall (coherence/semantic weighted higher than sentiment)
-    heuristic["overall"] = round((heuristic["overall"] * 0.55 + tf_score * 0.22 + coherence_score * 0.18 + sentiment_score * 0.05), 1)
+    # Blend transformer scores into overall with improved weighting
+    heuristic["overall"] = round((heuristic["overall"] * 0.48 + tf_score * 0.26 + coherence_score * 0.21 + sentiment_score * 0.05), 1)
     heuristic["sentiment"] = sentiment_score
     heuristic["coherence_transformer"] = coherence_score
 
