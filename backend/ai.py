@@ -291,27 +291,48 @@ def _heuristic_evaluation(title, content):
     improvements = []
 
     if grammar >= 80:
-        strengths.append("sentence mechanics are mostly clean")
+        strengths.append("Strong sentence mechanics — punctuation and capitalization are mostly clean.")
     else:
-        improvements.append("clean up punctuation and sentence openings")
+        improvements.append("Clean up punctuation issues and ensure every sentence starts with a capital letter.")
 
     if coherence >= 78:
-        strengths.append("ideas flow logically across the essay")
+        strengths.append("Good logical flow — ideas connect well across paragraphs with effective transitions.")
     else:
-        improvements.append("add transitions and clearer paragraph progression")
+        improvements.append("Add transition words (e.g., however, therefore, moreover) and structure paragraphs more clearly.")
 
     if argumentation >= 78:
-        strengths.append("claims are supported with reasoning/evidence")
+        strengths.append("Claims are well-supported with reasoning and evidence.")
     else:
-        improvements.append("strengthen claims with concrete evidence and examples")
+        improvements.append("Strengthen your claims with concrete evidence, examples, or data to make arguments more persuasive.")
 
-    strengths_text = ", ".join(strengths) if strengths else "you present a solid starting draft"
-    improvements_text = ", ".join(improvements) if improvements else "keep refining clarity and precision"
+    if word_count > 200:
+        strengths.append("Thorough exploration of the topic with adequate depth.")
+    elif word_count < 80:
+        improvements.append("Expand your essay — at least 80-100 words are needed for a meaningful evaluation.")
 
-    feedback = (
-        f"Heuristic analysis: {word_count} words, {sentence_count} sentences, {paragraph_count} paragraphs. "
-        f"Strengths: {strengths_text}. "
-        f"Next steps: {improvements_text}."
+    if transition_hits >= 4:
+        strengths.append("Effective use of transition words creates a smooth reading experience.")
+
+    # Ensure at least one item in each
+    if not strengths:
+        strengths.append("You present a solid starting draft with potential for improvement.")
+    if not improvements:
+        improvements.append("Keep refining clarity and precision in your writing.")
+
+    tips = [
+        "Try reading your essay aloud — awkward phrases become obvious when spoken.",
+        "Strong essays follow the 'claim → evidence → analysis' pattern in every paragraph.",
+        "Vary your sentence length: mix short punchy sentences with longer descriptive ones.",
+        "A compelling conclusion doesn't just summarise — it leaves the reader with a new insight.",
+    ]
+    tip = tips[word_count % len(tips)]
+
+    feedback_summary = f"Analysis of {word_count} words across {sentence_count} sentences and {paragraph_count} paragraphs."
+    feedback_flat = (
+        f"{feedback_summary} "
+        f"Strengths: {'; '.join(strengths)}. "
+        f"Improvements: {'; '.join(improvements)}. "
+        f"Tip: {tip}"
     )
 
     return {
@@ -319,7 +340,11 @@ def _heuristic_evaluation(title, content):
         "coherence": coherence,
         "argumentation": argumentation,
         "overall": overall,
-        "feedback": feedback
+        "feedback": feedback_flat,
+        "feedback_summary": feedback_summary,
+        "strengths": strengths,
+        "improvements": improvements,
+        "tip": tip,
     }
 
 def _academic_heuristics(text):
@@ -401,9 +426,9 @@ def get_ai_evaluation(title, content, mode="Standard"):
         academic_json_extra = ""
         if mode == "Academic":
             academic_json_extra = """
-  "plagiarism_risk": 8,
-  "citation_quality": 65,
-  "originality": 82,"""
+   "plagiarism_risk": 8,
+   "citation_quality": 65,
+   "originality": 82,"""
 
         prompt = f"""You are an expert essay grader evaluating under the '{mode}' mode.
 {instruction}
@@ -417,12 +442,23 @@ Provide three core scores (0-100) for:
 3. Argumentation
 {'Also estimate (0-100) plagiarism_risk (higher = more plagiarised), citation_quality, and originality.' if mode == 'Academic' else ''}
 
-Provide detailed feedback specifically targeting the {mode} criteria.
+Provide detailed, structured feedback specifically targeting the {mode} criteria.
+Include:
+- "feedback_summary": 1-2 sentence overall verdict
+- "strengths": array of 2-3 specific things done well (each a full sentence)
+- "improvements": array of 2-3 actionable improvements (each a full sentence with concrete suggestions)
+- "tip": one motivational pro-tip for the writer
+- "feedback": a single paragraph combining the above
+
 Output EXACTLY as valid JSON:
 {{
   "grammar": 85,
   "coherence": 78,
   "argumentation": 92,{academic_json_extra}
+  "feedback_summary": "A well-structured essay with strong arguments but room for grammatical polish.",
+  "strengths": ["Clear thesis statement that anchors the entire essay.", "Effective use of evidence to support claims."],
+  "improvements": ["Vary sentence structure to improve readability.", "Add a counter-argument paragraph for balance."],
+  "tip": "Try reading your essay aloud to catch awkward phrasing.",
   "feedback": "..."
 }}
 """
@@ -454,7 +490,19 @@ Output EXACTLY as valid JSON:
                 o = round((g + c + a) / 3, 1)
 
             fb = res.get("feedback", "Excellent draft.")
-            final = {"grammar": g, "coherence": c, "argumentation": a, "overall": o, "feedback": fb}
+            fb_summary = res.get("feedback_summary", fb[:120])
+            strengths = res.get("strengths", heuristic.get("strengths", ["Good starting draft."]))
+            improvements_list = res.get("improvements", heuristic.get("improvements", ["Keep refining."]))
+            tip = res.get("tip", heuristic.get("tip", "Read your essay aloud to catch mistakes."))
+
+            final = {
+                "grammar": g, "coherence": c, "argumentation": a, "overall": o,
+                "feedback": fb,
+                "feedback_summary": fb_summary,
+                "strengths": strengths if isinstance(strengths, list) else [strengths],
+                "improvements": improvements_list if isinstance(improvements_list, list) else [improvements_list],
+                "tip": tip,
+            }
 
             # Merge Academic extras from LLM (fallback to heuristic)
             if mode == "Academic":
