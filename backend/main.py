@@ -30,7 +30,7 @@ app.add_middleware(
 async def startup():
     db.init_db()
 
-# --- Models ---
+# ──────────────────── Models ────────────────────
 class UserRegister(BaseModel):
     username: str
     email: str
@@ -57,17 +57,45 @@ class AskAI(BaseModel):
     context: str
     mode: str = "Standard"
 
-# --- Auth Routes ---
+# Teacher-mode models
+class TeacherRegister(BaseModel):
+    username: str
+    email: str
+    password: str
+    fullName: str
+
+class RoomCreate(BaseModel):
+    name: str
+    description: str = ""
+
+class JoinRoom(BaseModel):
+    room_code: str
+
+class RoomEssaySubmit(BaseModel):
+    title: str
+    content: str
+
+class TeacherReview(BaseModel):
+    grammar: float
+    coherence: float
+    argument: float
+    overall: float
+    review: str
+
+class AddMember(BaseModel):
+    username: str
+
+# ──────────────────── Auth Routes ────────────────────
 @app.post("/api/auth/register")
 async def register(user: UserRegister):
     if db.get_user_by_username(user.username):
         raise HTTPException(status_code=400, detail="Username already taken.")
 
     hashed_pw = auth.get_password_hash(user.password)
-    uid = db.create_user(user.username, user.email, hashed_pw, user.fullName)
+    uid = db.create_user(user.username, user.email, hashed_pw, user.fullName, role="student")
 
-    token = auth.create_access_token(data={"sub": str(uid)})
-    return {"access_token": token, "token_type": "bearer", "username": user.username, "fullName": user.fullName}
+    token = auth.create_access_token(data={"sub": str(uid), "role": "student"})
+    return {"access_token": token, "token_type": "bearer", "username": user.username, "fullName": user.fullName, "role": "student"}
 
 @app.post("/api/auth/login")
 async def login(user: UserLogin):
@@ -75,23 +103,21 @@ async def login(user: UserLogin):
     if not db_user or not auth.verify_password(user.password, db_user["password"]):
         raise HTTPException(status_code=401, detail="Invalid username or password.")
 
-    token = auth.create_access_token(data={"sub": str(db_user["id"])})
-    return {"access_token": token, "token_type": "bearer", "username": db_user["username"], "fullName": db_user["full_name"]}
+    role = db_user.get("role", "student")
+    token = auth.create_access_token(data={"sub": str(db_user["id"]), "role": role})
+    return {"access_token": token, "token_type": "bearer", "username": db_user["username"], "fullName": db_user["full_name"], "role": role}
 
 @app.post("/api/auth/google")
 async def google_login(body: GoogleAuth):
     """Verify via Google's userinfo endpoint and sign the user in."""
     try:
-        # Verify the access token by calling Google's userinfo endpoint
         async with httpx.AsyncClient() as client:
             resp = await client.get(
                 "https://www.googleapis.com/oauth2/v3/userinfo",
                 headers={"Authorization": f"Bearer {body.credential}"}
             )
-        
         if resp.status_code != 200:
             raise HTTPException(status_code=401, detail="Invalid Google token.")
-        
         userinfo = resp.json()
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Google verification failed: {str(e)}")
@@ -101,36 +127,108 @@ async def google_login(body: GoogleAuth):
     full_name = userinfo.get("name", body.name or "Google User")
     username = f"g_{google_id}"
 
-    # First try to find existing user by username (google sub)
     db_user = db.get_user_by_username(username)
-    
     if not db_user:
-        # Also check by email in case they registered differently before
         db_user = db.get_user_by_email(email)
-    
     if not db_user:
-        # Brand new Google user — create account
         uid = db.create_user(
             username=username,
             email=email,
             hashed_pw=auth.get_password_hash(google_id + "_google_secret"),
-            full_name=full_name
+            full_name=full_name,
+            role="student"
         )
+        role = "student"
     else:
         uid = db_user["id"]
         full_name = db_user.get("full_name") or full_name
+        role = db_user.get("role", "student")
 
-    token = auth.create_access_token(data={"sub": str(uid)})
+    token = auth.create_access_token(data={"sub": str(uid), "role": role})
     return {
         "access_token": token,
         "token_type": "bearer",
         "username": username,
         "fullName": full_name,
-        "email": email
+        "email": email,
+        "role": role
     }
 
+# ──────────────────── Teacher Auth Routes ────────────────────
+@app.post("/api/auth/teacher/register")
+async def teacher_register(user: TeacherRegister):
+    if db.get_user_by_username(user.username):
+        raise HTTPException(status_code=400, detail="Username already taken.")
 
-# --- Evaluation Routes ---
+    hashed_pw = auth.get_password_hash(user.password)
+    uid = db.create_user(user.username, user.email, hashed_pw, user.fullName, role="teacher")
+
+    token = auth.create_access_token(data={"sub": str(uid), "role": "teacher"})
+    return {"access_token": token, "token_type": "bearer", "username": user.username, "fullName": user.fullName, "role": "teacher"}
+
+@app.post("/api/auth/teacher/login")
+async def teacher_login(user: UserLogin):
+    db_user = db.get_user_by_username(user.username)
+    if not db_user or not auth.verify_password(user.password, db_user["password"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
+
+    if db_user.get("role") != "teacher":
+        raise HTTPException(status_code=403, detail="This account is not a teacher account.")
+
+    token = auth.create_access_token(data={"sub": str(db_user["id"]), "role": "teacher"})
+    return {"access_token": token, "token_type": "bearer", "username": db_user["username"], "fullName": db_user["full_name"], "role": "teacher"}
+
+@app.post("/api/auth/teacher/google")
+async def teacher_google_login(body: GoogleAuth):
+    """Google sign-in for teachers. Creates a teacher account if new."""
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": f"Bearer {body.credential}"}
+            )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=401, detail="Invalid Google token.")
+        userinfo = resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Google verification failed: {str(e)}")
+
+    google_id = userinfo.get("sub", body.sub)
+    email = userinfo.get("email", body.email)
+    full_name = userinfo.get("name", body.name or "Google Teacher")
+    username = f"t_g_{google_id}"
+
+    db_user = db.get_user_by_username(username)
+    if not db_user:
+        db_user = db.get_user_by_email(email)
+
+    if not db_user:
+        uid = db.create_user(
+            username=username, email=email,
+            hashed_pw=auth.get_password_hash(google_id + "_google_teacher_secret"),
+            full_name=full_name, role="teacher"
+        )
+        role = "teacher"
+    else:
+        uid = db_user["id"]
+        full_name = db_user.get("full_name") or full_name
+        role = db_user.get("role", "student")
+        if role != "teacher":
+            raise HTTPException(status_code=403, detail="This Google account is registered as a student. Use student login instead.")
+
+    token = auth.create_access_token(data={"sub": str(uid), "role": "teacher"})
+    return {
+        "access_token": token, "token_type": "bearer",
+        "username": username, "fullName": full_name,
+        "email": email, "role": "teacher"
+    }
+
+# ──────────────────── Teacher Dashboard Stats ────────────────────
+@app.get("/api/teacher/dashboard/stats")
+async def teacher_stats(teacher_id: int = Depends(auth.get_current_teacher_id)):
+    return db.get_teacher_stats(teacher_id)
+
+# ──────────────────── Evaluation Routes ────────────────────
 @app.post("/api/evaluate")
 async def evaluate_essay(essay: EssaySubmit, user_id: int = Depends(auth.get_current_user_id)):
     result = ai.get_ai_evaluation(essay.title, essay.content, essay.mode)
@@ -148,13 +246,13 @@ async def evaluate_essay(essay: EssaySubmit, user_id: int = Depends(auth.get_cur
 
     return {**result, "id": essay_id}
 
-# --- Ask AI Route ---
+# ──────────────────── Ask AI Route ────────────────────
 @app.post("/api/ask-ai")
 async def ask_ai(req: AskAI, user_id: int = Depends(auth.get_current_user_id)):
     response = ai.get_ai_chat(req.question, req.context, req.mode)
     return {"response": response}
 
-# --- Dashboard Routes ---
+# ──────────────────── Dashboard Routes ────────────────────
 @app.get("/api/dashboard/stats")
 async def get_stats(user_id: int = Depends(auth.get_current_user_id)):
     averages = db.get_average_scores(user_id)
@@ -177,6 +275,122 @@ async def delete_essay_endpoint(essay_id: int, user_id: int = Depends(auth.get_c
     if not success:
         raise HTTPException(status_code=404, detail="Essay not found or unauthorized.")
     return {"message": "Essay deleted successfully."}
+
+# ──────────────────── Room Routes (Teacher) ────────────────────
+@app.post("/api/rooms")
+async def create_room(body: RoomCreate, teacher_id: int = Depends(auth.get_current_teacher_id)):
+    result = db.create_room(teacher_id, body.name, body.description)
+    if not result:
+        raise HTTPException(status_code=500, detail="Failed to create room. Try again.")
+    return {"message": "Room created.", **result}
+
+@app.get("/api/rooms")
+async def list_rooms(teacher_id: int = Depends(auth.get_current_teacher_id)):
+    return db.get_teacher_rooms(teacher_id)
+
+@app.get("/api/rooms/{room_id}")
+async def get_room(room_id: int, teacher_id: int = Depends(auth.get_current_teacher_id)):
+    room = db.get_room_by_id(room_id)
+    if not room or room["teacher_id"] != teacher_id:
+        raise HTTPException(status_code=404, detail="Room not found.")
+    members = db.get_room_members(room_id)
+    essays = db.get_room_essays(room_id)
+    return {**room, "members": members, "essays": essays}
+
+@app.post("/api/rooms/{room_id}/members")
+async def add_member(room_id: int, body: AddMember, teacher_id: int = Depends(auth.get_current_teacher_id)):
+    room = db.get_room_by_id(room_id)
+    if not room or room["teacher_id"] != teacher_id:
+        raise HTTPException(status_code=404, detail="Room not found.")
+
+    student = db.get_user_by_username(body.username)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found.")
+    if student.get("role") == "teacher":
+        raise HTTPException(status_code=400, detail="Cannot add a teacher as a student member.")
+
+    success = db.add_room_member(room_id, student["id"])
+    if not success:
+        raise HTTPException(status_code=400, detail="Student is already a member of this room.")
+    return {"message": f"Student '{body.username}' added to room."}
+
+@app.delete("/api/rooms/{room_id}/members/{student_id}")
+async def remove_member(room_id: int, student_id: int, teacher_id: int = Depends(auth.get_current_teacher_id)):
+    room = db.get_room_by_id(room_id)
+    if not room or room["teacher_id"] != teacher_id:
+        raise HTTPException(status_code=404, detail="Room not found.")
+
+    success = db.remove_room_member(room_id, student_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Student not found in this room.")
+    return {"message": "Student removed from room."}
+
+@app.get("/api/rooms/{room_id}/essays/{essay_id}")
+async def get_room_essay(room_id: int, essay_id: int, teacher_id: int = Depends(auth.get_current_teacher_id)):
+    room = db.get_room_by_id(room_id)
+    if not room or room["teacher_id"] != teacher_id:
+        raise HTTPException(status_code=404, detail="Room not found.")
+
+    essay = db.get_room_essay_by_id(essay_id)
+    if not essay or essay["room_id"] != room_id:
+        raise HTTPException(status_code=404, detail="Essay not found.")
+    return essay
+
+@app.post("/api/rooms/{room_id}/essays/{essay_id}/review")
+async def review_essay(room_id: int, essay_id: int, body: TeacherReview, teacher_id: int = Depends(auth.get_current_teacher_id)):
+    room = db.get_room_by_id(room_id)
+    if not room or room["teacher_id"] != teacher_id:
+        raise HTTPException(status_code=404, detail="Room not found.")
+
+    essay = db.get_room_essay_by_id(essay_id)
+    if not essay or essay["room_id"] != room_id:
+        raise HTTPException(status_code=404, detail="Essay not found.")
+
+    success = db.save_teacher_review(
+        essay_id=essay_id,
+        review=body.review,
+        grammar=body.grammar,
+        coherence=body.coherence,
+        argument=body.argument,
+        overall=body.overall
+    )
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to save review.")
+    return {"message": "Review submitted successfully."}
+
+# ──────────────────── Student Room Routes ────────────────────
+@app.post("/api/student/rooms/join")
+async def join_room(body: JoinRoom, student_id: int = Depends(auth.get_current_user_id)):
+    room = db.get_room_by_code(body.room_code.strip().upper())
+    if not room:
+        raise HTTPException(status_code=404, detail="Invalid room code.")
+
+    success = db.add_room_member(room["id"], student_id)
+    if not success:
+        raise HTTPException(status_code=400, detail="You are already a member of this room.")
+    return {"message": f"Joined room '{room['name']}'.", "room_id": room["id"]}
+
+@app.get("/api/student/rooms")
+async def student_list_rooms(student_id: int = Depends(auth.get_current_user_id)):
+    return db.get_student_rooms(student_id)
+
+@app.get("/api/student/rooms/{room_id}")
+async def student_get_room(room_id: int, student_id: int = Depends(auth.get_current_user_id)):
+    if not db.is_room_member(room_id, student_id):
+        raise HTTPException(status_code=403, detail="You are not a member of this room.")
+    room = db.get_room_by_id(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found.")
+    essays = db.get_student_room_essays(room_id, student_id)
+    return {**room, "essays": essays}
+
+@app.post("/api/student/rooms/{room_id}/essays")
+async def student_submit_essay(room_id: int, body: RoomEssaySubmit, student_id: int = Depends(auth.get_current_user_id)):
+    if not db.is_room_member(room_id, student_id):
+        raise HTTPException(status_code=403, detail="You are not a member of this room.")
+
+    essay_id = db.submit_room_essay(room_id, student_id, body.title, body.content)
+    return {"message": "Essay submitted.", "essay_id": essay_id}
 
 if __name__ == "__main__":
     import uvicorn
