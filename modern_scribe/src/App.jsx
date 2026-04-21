@@ -5,6 +5,9 @@ import Hero3D from './components/Hero3D';
 import Evaluate from './views/Evaluate';
 import Dashboard from './views/Dashboard';
 import Auth from './views/Auth';
+import TeacherAuth from './views/TeacherAuth';
+import TeacherDashboard from './views/TeacherDashboard';
+import StudentRooms from './views/StudentRooms';
 import './index.css';
 
 const Navbar = ({ activePage, setActivePage, user, onLogout, theme, onToggleTheme }) => {
@@ -18,11 +21,19 @@ const Navbar = ({ activePage, setActivePage, user, onLogout, theme, onToggleThem
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
-    const navItems = [
-        { name: 'Home', id: 'home' },
-        { name: 'Evaluate', id: 'evaluate' },
-        { name: 'Dashboard', id: 'dashboard' },
-    ];
+    const isTeacher = user?.role === 'teacher';
+
+    const navItems = isTeacher
+        ? [
+            { name: 'Home', id: 'home' },
+            { name: 'Classrooms', id: 'teacher-dashboard' },
+        ]
+        : [
+            { name: 'Home', id: 'home' },
+            { name: 'Evaluate', id: 'evaluate' },
+            { name: 'Dashboard', id: 'dashboard' },
+            ...(user ? [{ name: 'Rooms', id: 'student-rooms' }] : []),
+        ];
 
     const navStyle = {
         position: 'fixed',
@@ -47,8 +58,11 @@ const Navbar = ({ activePage, setActivePage, user, onLogout, theme, onToggleThem
                 onClick={() => setActivePage('home')}
                 style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', cursor: 'pointer' }}
             >
-                <div style={{ width: 12, height: 12, background: 'var(--amber)', borderRadius: '50%', boxShadow: '0 0 20px var(--amber)' }} />
+                <div style={{ width: 12, height: 12, background: isTeacher ? '#4A90D9' : 'var(--amber)', borderRadius: '50%', boxShadow: `0 0 20px ${isTeacher ? '#4A90D9' : 'var(--amber)'}` }} />
                 <span style={{ fontFamily: 'var(--serif)', fontSize: '1.6rem', fontWeight: 900, color: 'var(--paper)', letterSpacing: '-0.03em' }}>SmartScribe</span>
+                {isTeacher && (
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', background: 'rgba(74,144,217,0.15)', color: '#4A90D9', padding: '0.25rem 0.6rem', borderRadius: 100, textTransform: 'uppercase', letterSpacing: '0.15em', fontWeight: 700 }}>Teacher</span>
+                )}
             </div>
 
             <div style={{ display: 'flex', gap: '3.5rem', alignItems: 'center' }}>
@@ -65,7 +79,7 @@ const Navbar = ({ activePage, setActivePage, user, onLogout, theme, onToggleThem
                                 background: 'transparent',
                                 border: 'none',
                                 cursor: 'pointer',
-                                color: activePage === item.id ? 'var(--amber2)' : 'var(--text-dim)',
+                                color: activePage === item.id ? (isTeacher ? '#4A90D9' : 'var(--amber2)') : 'var(--text-dim)',
                                 transition: 'all 0.4s',
                                 position: 'relative',
                                 padding: '0.5rem 0'
@@ -75,7 +89,7 @@ const Navbar = ({ activePage, setActivePage, user, onLogout, theme, onToggleThem
                             {activePage === item.id && (
                                 <motion.div
                                     layoutId="nav-glow"
-                                    style={{ position: 'absolute', bottom: -2, left: 0, right: 0, height: 1.5, background: 'var(--amber)', boxShadow: '0 0 10px var(--amber)' }}
+                                    style={{ position: 'absolute', bottom: -2, left: 0, right: 0, height: 1.5, background: isTeacher ? '#4A90D9' : 'var(--amber)', boxShadow: `0 0 10px ${isTeacher ? '#4A90D9' : 'var(--amber)'}` }}
                                 />
                             )}
                         </button>
@@ -141,24 +155,44 @@ const Navbar = ({ activePage, setActivePage, user, onLogout, theme, onToggleThem
                         </button>
                     </div>
                 ) : (
-                    <button
-                        onClick={() => setActivePage('login')}
-                        style={{
-                            fontFamily: 'var(--mono)',
-                            fontSize: '0.7rem',
-                            letterSpacing: '0.15em',
-                            padding: '0.8rem 1.8rem',
-                            background: activePage === 'login' ? 'var(--amber2)' : 'var(--amber)',
-                            color: '#000',
-                            fontWeight: 900,
-                            clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)',
-                            border: 'none',
-                            cursor: 'pointer',
-                            transition: 'all 0.3s'
-                        }}
-                    >
-                        LOGIN
-                    </button>
+                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                        <button
+                            onClick={() => setActivePage('login')}
+                            style={{
+                                fontFamily: 'var(--mono)',
+                                fontSize: '0.7rem',
+                                letterSpacing: '0.15em',
+                                padding: '0.8rem 1.8rem',
+                                background: activePage === 'login' ? 'var(--amber2)' : 'var(--amber)',
+                                color: '#000',
+                                fontWeight: 900,
+                                clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)',
+                                border: 'none',
+                                cursor: 'pointer',
+                                transition: 'all 0.3s'
+                            }}
+                        >
+                            LOGIN
+                        </button>
+                        <button
+                            onClick={() => setActivePage('teacher-login')}
+                            style={{
+                                fontFamily: 'var(--mono)',
+                                fontSize: '0.65rem',
+                                letterSpacing: '0.15em',
+                                padding: '0.7rem 1.4rem',
+                                background: activePage === 'teacher-login' ? '#357ABD' : 'transparent',
+                                color: activePage === 'teacher-login' ? '#fff' : '#4A90D9',
+                                fontWeight: 700,
+                                border: '1px solid rgba(74,144,217,0.3)',
+                                borderRadius: 4,
+                                cursor: 'pointer',
+                                transition: 'all 0.3s'
+                            }}
+                        >
+                            TEACHER
+                        </button>
+                    </div>
                 )}
             </div>
         </nav>
@@ -284,8 +318,14 @@ const App = () => {
     }, [theme]);
 
     const handleAuthSuccess = (data) => {
-        setUser({ username: data.username, fullName: data.fullName });
-        setActivePage('dashboard');
+        const userData = { username: data.username, fullName: data.fullName, role: data.role || 'student' };
+        setUser(userData);
+        localStorage.setItem('user', JSON.stringify(userData));
+        if (data.role === 'teacher') {
+            setActivePage('teacher-dashboard');
+        } else {
+            setActivePage('dashboard');
+        }
     };
 
     const handleLogout = () => {
@@ -298,6 +338,8 @@ const App = () => {
     const handleToggleTheme = () => {
         setTheme((previousTheme) => (previousTheme === 'dark' ? 'light' : 'dark'));
     };
+
+    const isTeacher = user?.role === 'teacher';
 
     return (
         <div style={{ background: 'var(--ink)', minHeight: '100vh', position: 'relative' }}>
@@ -316,6 +358,9 @@ const App = () => {
                         {activePage === 'evaluate' && (user ? <Evaluate /> : <Auth onBack={() => setActivePage('home')} onAuthSuccess={handleAuthSuccess} />)}
                         {activePage === 'dashboard' && (user ? <Dashboard /> : <Auth onBack={() => setActivePage('home')} onAuthSuccess={handleAuthSuccess} />)}
                         {activePage === 'login' && <Auth onBack={() => setActivePage('home')} onAuthSuccess={handleAuthSuccess} />}
+                        {activePage === 'teacher-login' && <TeacherAuth onBack={() => setActivePage('login')} onAuthSuccess={handleAuthSuccess} />}
+                        {activePage === 'teacher-dashboard' && (isTeacher ? <TeacherDashboard /> : <TeacherAuth onBack={() => setActivePage('home')} onAuthSuccess={handleAuthSuccess} />)}
+                        {activePage === 'student-rooms' && (user ? <StudentRooms /> : <Auth onBack={() => setActivePage('home')} onAuthSuccess={handleAuthSuccess} />)}
                     </motion.div>
                 </AnimatePresence>
             </main>

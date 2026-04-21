@@ -49,3 +49,25 @@ async def get_current_user_id(token: str = Depends(oauth2_scheme)):
         return int(user_id)
     except JWTError:
         raise credentials_exception
+
+async def get_current_teacher_id(token: str = Depends(oauth2_scheme)):
+    """Validate token AND ensure the user has role='teacher'."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        role = payload.get("role", "student")
+        if user_id is None:
+            raise credentials_exception
+        if role != "teacher":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Teacher access required.",
+            )
+        return int(user_id)
+    except JWTError:
+        raise credentials_exception
