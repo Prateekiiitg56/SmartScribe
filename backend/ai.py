@@ -3,59 +3,66 @@ import json
 import re
 import numpy as np
 import torch
-from transformers import pipeline, AutoTokenizer, AutoModel
+from transformers import pipeline, AutoTokenizer, AutoModel, AutoModelForSequenceClassification
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# Stronger embedding model for semantic similarity and coherence
-_HF_MODEL_NAME = os.getenv("HF_EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
-_SENTIMENT_MODEL_NAME = os.getenv("HF_SENTIMENT_MODEL", "cardiffnlp/twitter-roberta-base-sentiment-latest")
-_MAX_SENTENCES_FOR_EMBED = int(os.getenv("HF_MAX_SENTENCES", "32"))
+# ──────────────────── Model Configuration ────────────────────
+# Grammar: CoLA (Corpus of Linguistic Acceptability) — purpose-built for grammaticality
+_COLA_MODEL = os.getenv("HF_COLA_MODEL", "textattack/roberta-base-CoLA")
+# Coherence: Stronger embedding model for semantic similarity
+_EMBED_MODEL = os.getenv("HF_EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5")
+# Argument: NLI (Natural Language Inference) — measures logical entailment
+_NLI_MODEL = os.getenv("HF_NLI_MODEL", "cross-encoder/nli-deberta-v3-base")
+_MAX_SENTENCES = int(os.getenv("HF_MAX_SENTENCES", "32"))
 
-_hf_tokenizer = None
-_hf_model = None
-_sentiment_pipe = None
-
-
-def _load_hf_model():
-    global _hf_tokenizer, _hf_model
-    if _hf_tokenizer is None or _hf_model is None:
-        _hf_tokenizer = AutoTokenizer.from_pretrained(_HF_MODEL_NAME)
-        _hf_model = AutoModel.from_pretrained(_HF_MODEL_NAME)
-        _hf_model.eval()
+# ──────────────────── Lazy-loaded Model Singletons ────────────────────
+_cola_pipe = None
+_embed_tokenizer = None
+_embed_model = None
+_nli_pipe = None
 
 
-def _load_sentiment_pipe():
-    global _sentiment_pipe
-    if _sentiment_pipe is None:
-        _sentiment_pipe = pipeline("sentiment-analysis", model=_SENTIMENT_MODEL_NAME)
+def _load_cola():
+    global _cola_pipe
+    if _cola_pipe is None:
+        print("[SmartScribe] Loading CoLA grammar model…")
+        _cola_pipe = pipeline("text-classification", model=_COLA_MODEL, device=-1)
 
 
+def _load_embed():
+    global _embed_tokenizer, _embed_model
+    if _embed_tokenizer is None:
+        print("[SmartScribe] Loading embedding model…")
+        _embed_tokenizer = AutoTokenizer.from_pretrained(_EMBED_MODEL)
+        _embed_model = AutoModel.from_pretrained(_EMBED_MODEL)
+        _embed_model.eval()
+
+
+def _load_nli():
+    global _nli_pipe
+    if _nli_pipe is None:
+        print("[SmartScribe] Loading NLI argument model…")
+        _nli_pipe = pipeline("text-classification", model=_NLI_MODEL, device=-1)
+
+
+# ──────────────────── Text Utilities ────────────────────
 def _split_sentences(text):
     return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text or "") if s.strip()]
 
 
 def _mean_pool(last_hidden_state, attention_mask):
-    token_embeddings = last_hidden_state
-    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-    sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, dim=1)
-    sum_mask = torch.clamp(input_mask_expanded.sum(dim=1), min=1e-9)
-    return sum_embeddings / sum_mask
+    mask = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+    return torch.sum(last_hidden_state * mask, dim=1) / torch.clamp(mask.sum(dim=1), min=1e-9)
 
 
-def _embed_texts(texts, max_length=224):
+def _embed_texts(texts, max_length=256):
     if not texts:
         return np.empty((0, 1), dtype=np.float32)
-    _load_hf_model()
-    encoded = _hf_tokenizer(
-        texts,
-        padding=True,
-        truncation=True,
-        max_length=max_length,
-        return_tensors="pt",
-    )
+    _load_embed()
+    encoded = _embed_tokenizer(texts, padding=True, truncation=True, max_length=max_length, return_tensors="pt")
     with torch.no_grad():
-        outputs = _hf_model(**encoded)
+        outputs = _embed_model(**encoded)
     pooled = _mean_pool(outputs.last_hidden_state, encoded["attention_mask"])
     vectors = pooled.detach().cpu().numpy()
     norms = np.linalg.norm(vectors, axis=1, keepdims=True) + 1e-9
@@ -66,120 +73,246 @@ def _cosine_similarity(a, b):
     return float(np.dot(a, b) / ((np.linalg.norm(a) * np.linalg.norm(b)) + 1e-9))
 
 
-def transformer_sentiment_score(text):
-    _load_sentiment_pipe()
-    try:
-        sentences = _split_sentences(text)
-        if not sentences:
-            return 50.0
+# ──────────────────── Grammar Scoring (CoLA) ────────────────────
+def transformer_grammar_score(text):
+    """Score grammar using CoLA acceptability classifier (0-100)."""
+    _load_cola()
+    sentences = _split_sentences(text)
+    if not sentences:
+        return 40.0
 
-        chunks = []
-        current = []
-        current_len = 0
-        for sentence in sentences[:18]:
-            if current_len + len(sentence) > 400 and current:
-                chunks.append(" ".join(current))
-                current = [sentence]
-                current_len = len(sentence)
-            else:
-                current.append(sentence)
-                current_len += len(sentence)
-        if current:
-            chunks.append(" ".join(current))
+    # Process in chunks to avoid token limit
+    batch_size = 16
+    acceptable_count = 0
+    total_confidence = 0.0
 
-        preds = _sentiment_pipe(chunks)
-        sentiment_values = []
-        confidences = []
-        for pred in preds:
-            label = str(pred.get("label", "")).lower()
-            confidence = float(pred.get("score", 0.5))
-            if "positive" in label or "pos" in label:
-                sentiment_values.append(1.0)
-            elif "negative" in label or "neg" in label:
-                sentiment_values.append(0.0)
-            else:
-                sentiment_values.append(0.5)
-            confidences.append(confidence)
+    for i in range(0, min(len(sentences), 48), batch_size):
+        batch = sentences[i:i + batch_size]
+        try:
+            preds = _cola_pipe(batch, truncation=True, max_length=128)
+            for pred in preds:
+                label = str(pred.get("label", "")).lower()
+                conf = float(pred.get("score", 0.5))
+                if "acceptable" in label or label == "label_1" or label == "1":
+                    acceptable_count += 1
+                    total_confidence += conf
+                else:
+                    total_confidence += (1.0 - conf)  # partially credit low-confidence rejections
+        except Exception:
+            pass
 
-        avg_sentiment = float(np.mean(sentiment_values))
-        avg_confidence = float(np.mean(confidences))
-        sentiment_variance = float(np.std(sentiment_values))
-
-        balance_component = max(0.0, 1.0 - abs(avg_sentiment - 0.5) * 1.8)
-        consistency_bonus = max(0.0, 1.0 - sentiment_variance * 1.5) * 8.0
-        score = 58.0 + 28.0 * balance_component + 18.0 * avg_confidence + consistency_bonus
-        return round(max(0.0, min(100.0, score)), 1)
-    except Exception:
+    if not sentences:
         return 50.0
 
+    n = min(len(sentences), 48)
+    accept_ratio = acceptable_count / n
+    avg_conf = total_confidence / n
+    
+    # Scale: 100% acceptable with high confidence = 95+, 0% = ~30
+    base = 30.0 + 65.0 * accept_ratio
+    conf_bonus = (avg_conf - 0.5) * 12.0  # up to ±6
+    
+    # Penalize very short texts
+    if n < 3:
+        base -= 8.0
 
+    return round(max(0.0, min(100.0, base + conf_bonus)), 1)
+
+
+# ──────────────────── Coherence Scoring (Embeddings) ────────────────────
 def transformer_coherence_score(text):
+    """Score coherence via sentence embedding similarity flow (0-100)."""
     sentences = _split_sentences(text)
     if len(sentences) < 3:
-        return 42.0
+        return 38.0
 
-    sampled = sentences[:_MAX_SENTENCES_FOR_EMBED]
-    embeddings = _embed_texts(sampled, max_length=192)
+    sampled = sentences[:_MAX_SENTENCES]
+    embeddings = _embed_texts(sampled, max_length=256)
     if len(embeddings) < 3:
-        return 45.0
+        return 40.0
 
-    adjacent_sims = [_cosine_similarity(embeddings[i], embeddings[i + 1]) for i in range(len(embeddings) - 1)]
-    avg_adj = float(np.mean(adjacent_sims))
-    std_adj = float(np.std(adjacent_sims))
-    
-    # Count very low similarities (abrupt topic changes)
-    abrupt_jumps = sum(1 for s in adjacent_sims if s < 0.12)
-    # Count strong transitions (very high similarity might indicate redundancy)
-    redundant_transitions = sum(1 for s in adjacent_sims if s > 0.92)
-    
-    # Improved base score calculation with better scaling
-    base = 45.0 + 65.0 * max(0.0, min(1.0, (avg_adj - 0.15) / 0.7))
-    
-    # Penalties for instability and issues
-    stability_penalty = min(std_adj * 30.0, 18.0)
-    jump_penalty = min(abrupt_jumps * 5.5, 20.0)
-    redundancy_penalty = min(redundant_transitions * 3.0, 12.0)
+    # Adjacent sentence similarities (flow)
+    adj_sims = [_cosine_similarity(embeddings[i], embeddings[i + 1]) for i in range(len(embeddings) - 1)]
+    avg_adj = float(np.mean(adj_sims))
+    std_adj = float(np.std(adj_sims))
 
-    score = base - stability_penalty - jump_penalty - redundancy_penalty
-    return round(max(0.0, min(100.0, score)), 1)
-
-
-def transformer_semantic_score(text):
-    sentences = _split_sentences(text)
-    if len(sentences) < 2:
-        return 45.0
-
-    sampled = sentences[:_MAX_SENTENCES_FOR_EMBED]
-    embeddings = _embed_texts(sampled, max_length=224)
-    if len(embeddings) < 2:
-        return 48.0
-
+    # Global coherence: how well each sentence relates to the document centroid
     centroid = embeddings.mean(axis=0)
     centroid = centroid / (np.linalg.norm(centroid) + 1e-9)
+    global_sims = [_cosine_similarity(vec, centroid) for vec in embeddings]
+    avg_global = float(np.mean(global_sims))
 
-    focus_scores = [_cosine_similarity(vec, centroid) for vec in embeddings]
-    focus_mean = float(np.mean(focus_scores))
-    focus_std = float(np.std(focus_scores))
+    # Detect problems
+    abrupt_jumps = sum(1 for s in adj_sims if s < 0.15)
+    redundant = sum(1 for s in adj_sims if s > 0.95)
 
-    # Pairwise similarities for diversity assessment
-    pairwise_sims = []
-    for i in range(len(embeddings) - 2):
-        pairwise_sims.append(_cosine_similarity(embeddings[i], embeddings[i + 2]))
-    
-    # Calculate topic diversity (not too similar, not too different)
-    diversity = 1.0 - (float(np.mean(pairwise_sims)) if pairwise_sims else focus_mean)
-    
-    # Improved focus component with better thresholds
-    focus_component = 50.0 + 60.0 * max(0.0, min(1.0, (focus_mean - 0.18) / 0.72))
-    
-    # Diversity should be moderate (around 0.3-0.4 is ideal)
-    diversity_component = 100.0 - min(abs(diversity - 0.32) * 150.0, 42.0)
-    
-    # Consistency bonus: lower standard deviation in focus scores means better topic consistency
-    consistency_bonus = max(0.0, (0.25 - focus_std) * 20.0)
+    # Combined score
+    flow_score = 40.0 + 70.0 * max(0.0, min(1.0, (avg_adj - 0.1) / 0.7))
+    global_score = 35.0 + 70.0 * max(0.0, min(1.0, (avg_global - 0.2) / 0.6))
 
-    score = 0.68 * focus_component + 0.28 * diversity_component + 0.04 * consistency_bonus
+    base = 0.55 * flow_score + 0.45 * global_score
+    base -= min(std_adj * 25.0, 15.0)      # instability penalty
+    base -= min(abrupt_jumps * 6.0, 20.0)   # jump penalty
+    base -= min(redundant * 4.0, 12.0)      # redundancy penalty
+
+    return round(max(0.0, min(100.0, base)), 1)
+
+
+# ──────────────────── Argument Scoring (NLI) ────────────────────
+def transformer_argument_score(text):
+    """Score argument strength using NLI: do claims follow from evidence? (0-100)"""
+    _load_nli()
+    sentences = _split_sentences(text)
+    if len(sentences) < 2:
+        return 35.0
+
+    # Build premise-hypothesis pairs from consecutive sentences
+    pairs = []
+    for i in range(min(len(sentences) - 1, 20)):
+        pairs.append(f"{sentences[i]}</s></s>{sentences[i + 1]}")
+
+    entail_count = 0
+    contradict_count = 0
+    total_entail_conf = 0.0
+    
+    batch_size = 8
+    for i in range(0, len(pairs), batch_size):
+        batch = pairs[i:i + batch_size]
+        try:
+            preds = _nli_pipe(batch, truncation=True, max_length=256)
+            for pred in preds:
+                label = str(pred.get("label", "")).lower()
+                conf = float(pred.get("score", 0.5))
+                if "entail" in label:
+                    entail_count += 1
+                    total_entail_conf += conf
+                elif "contradict" in label:
+                    contradict_count += 1
+        except Exception:
+            pass
+
+    n = len(pairs)
+    if n == 0:
+        return 40.0
+
+    entail_ratio = entail_count / n
+    contradict_ratio = contradict_count / n
+    avg_entail_conf = total_entail_conf / max(entail_count, 1)
+
+    # Scale: high entailment = strong logical flow
+    base = 35.0 + 55.0 * entail_ratio
+    conf_bonus = (avg_entail_conf - 0.5) * 10.0
+    contradict_penalty = contradict_ratio * 25.0
+
+    # Bonus for longer, developed arguments
+    if len(sentences) >= 8:
+        base += 5.0
+    if len(sentences) >= 15:
+        base += 3.0
+
+    return round(max(0.0, min(100.0, base + conf_bonus - contradict_penalty)), 1)
+
+
+# ──────────────────── Formality Detection ────────────────────
+_INFORMAL_PATTERNS = [
+    r"\bcan't\b", r"\bwon't\b", r"\bdon't\b", r"\bdoesn't\b", r"\bisn't\b",
+    r"\baren't\b", r"\bwasn't\b", r"\bweren't\b", r"\bdidn't\b", r"\bcouldn't\b",
+    r"\bshouldn't\b", r"\bwouldn't\b", r"\bi'm\b", r"\byou're\b", r"\bthey're\b",
+    r"\bwe're\b", r"\bit's\b", r"\bthat's\b", r"\bwhat's\b", r"\bthere's\b",
+    r"\bkinda\b", r"\bgonna\b", r"\bwanna\b", r"\bgotta\b", r"\bsorta\b",
+    r"\blol\b", r"\bomg\b", r"\bbtw\b", r"\bidk\b", r"\bimo\b", r"\bimho\b",
+    r"\byeah\b", r"\bnope\b", r"\bcool\b", r"\bstuff\b", r"\bthing\b",
+    r"\blike\b(?:\s*,)", r"\byou know\b", r"\bi mean\b", r"\bbasically\b",
+]
+
+def _formality_score(text):
+    """Return formality score 0-100 (100 = very formal)."""
+    lower = text.lower()
+    word_count = max(len(lower.split()), 1)
+    
+    informal_hits = 0
+    for pat in _INFORMAL_PATTERNS:
+        informal_hits += len(re.findall(pat, lower))
+    
+    informal_density = informal_hits / word_count
+    # 0 density = 95 formality, high density = low formality
+    score = 95.0 - min(informal_density * 800.0, 70.0)
     return round(max(0.0, min(100.0, score)), 1)
+
+
+# ──────────────────── Unified Evaluation ────────────────────
+def get_transformer_scores(text, min_words=0, style="any"):
+    """
+    Unified HuggingFace evaluation returning grammar, coherence, argument scores.
+    
+    Args:
+        text: Essay content
+        min_words: Minimum word count required (0 = no requirement)
+        style: "formal" | "informal" | "any"
+    """
+    words = re.findall(r"\b[\w']+\b", text or "")
+    word_count = len(words)
+
+    # Run all three specialized models
+    try:
+        grammar = transformer_grammar_score(text)
+    except Exception:
+        grammar = 55.0
+    try:
+        coherence = transformer_coherence_score(text)
+    except Exception:
+        coherence = 55.0
+    try:
+        argument = transformer_argument_score(text)
+    except Exception:
+        argument = 55.0
+
+    overall = round((grammar * 0.30 + coherence * 0.35 + argument * 0.35), 1)
+
+    # --- Word count adjustment ---
+    word_feedback = ""
+    if min_words > 0 and word_count < min_words:
+        shortage = (min_words - word_count) / min_words
+        penalty = min(shortage * 25.0, 20.0)
+        overall = max(0, overall - penalty)
+        grammar = max(0, grammar - penalty * 0.3)
+        word_feedback = f"⚠️ Below minimum word count ({word_count}/{min_words} words). "
+    elif min_words > 0:
+        word_feedback = f"✓ Word count met ({word_count}/{min_words} words). "
+
+    # --- Formality adjustment ---
+    style_feedback = ""
+    if style in ("formal", "informal"):
+        formality = _formality_score(text)
+        if style == "formal" and formality < 60:
+            penalty = (60 - formality) * 0.25
+            grammar = max(0, grammar - penalty)
+            overall = max(0, overall - penalty * 0.5)
+            style_feedback = f"⚠️ Writing style is too informal (formality: {formality}/100). Avoid contractions and slang. "
+        elif style == "formal" and formality >= 80:
+            style_feedback = f"✓ Formal writing style detected (formality: {formality}/100). "
+        elif style == "informal" and formality > 85:
+            style_feedback = f"ℹ️ Writing is very formal (formality: {formality}/100). Consider a more relaxed tone. "
+        elif style == "informal":
+            style_feedback = f"✓ Informal style acceptable (formality: {formality}/100). "
+
+    feedback = (
+        f"HuggingFace Evaluation (CoLA + BGE + NLI):\n"
+        f"{word_feedback}{style_feedback}\n"
+        f"- Grammar (CoLA): {round(grammar, 1)}/100\n"
+        f"- Coherence (Embedding Flow): {round(coherence, 1)}/100\n"
+        f"- Argumentation (NLI): {round(argument, 1)}/100\n"
+        f"- Overall: {round(overall, 1)}/100"
+    )
+
+    return {
+        "grammar": round(grammar, 1),
+        "coherence": round(coherence, 1),
+        "argument": round(argument, 1),
+        "overall": round(overall, 1),
+        "feedback": feedback,
+        "word_count": word_count,
+    }
 
 load_dotenv()
 
@@ -375,21 +508,28 @@ def _academic_heuristics(text):
         "originality_score": originality_score,
     }
 
-def get_ai_evaluation(title, content, mode="Standard"):
+def get_ai_evaluation(title, content, mode="Standard", min_words=0, style="any"):
     heuristic = _heuristic_evaluation(title, content)
-    # Add transformer score
+    # Blend in upgraded transformer scores
     try:
-        tf_score = transformer_semantic_score(content or "")
-        sentiment_score = transformer_sentiment_score(content or "")
-        coherence_score = transformer_coherence_score(content or "")
-    except Exception as e:
-        tf_score = 50.0
-        sentiment_score = 50.0
-        coherence_score = 50.0
-    # Blend transformer scores into overall with improved weighting
-    heuristic["overall"] = round((heuristic["overall"] * 0.48 + tf_score * 0.26 + coherence_score * 0.21 + sentiment_score * 0.05), 1)
-    heuristic["sentiment"] = sentiment_score
-    heuristic["coherence_transformer"] = coherence_score
+        transformer_result = get_transformer_scores(content or "", min_words=min_words, style=style)
+        tf_grammar = transformer_result["grammar"]
+        tf_coherence = transformer_result["coherence"]
+        tf_argument = transformer_result["argument"]
+        
+        # Override heuristic feedback with the transformer word logic and style logic if requested
+        if min_words > 0 or style != "any":
+            heuristic["feedback_summary"] = transformer_result["feedback"] + "\n\n" + heuristic["feedback_summary"]
+            
+    except Exception:
+        tf_grammar = 55.0
+        tf_coherence = 55.0
+        tf_argument = 55.0
+    # Blend: 55% heuristic + 45% transformer
+    heuristic["grammar"] = round(heuristic["grammar"] * 0.55 + tf_grammar * 0.45, 1)
+    heuristic["coherence"] = round(heuristic["coherence"] * 0.55 + tf_coherence * 0.45, 1)
+    heuristic["argumentation"] = round(heuristic["argumentation"] * 0.55 + tf_argument * 0.45, 1)
+    heuristic["overall"] = round((heuristic["grammar"] * 0.30 + heuristic["coherence"] * 0.35 + heuristic["argumentation"] * 0.35), 1)
 
     if not OPENROUTER_API_KEY:
         if mode == "Academic":

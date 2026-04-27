@@ -61,6 +61,7 @@ def init_db():
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             room_id     INTEGER NOT NULL,
             student_id  INTEGER NOT NULL,
+            status      TEXT    DEFAULT 'pending',
             joined_at   TEXT    DEFAULT (datetime('now')),
             FOREIGN KEY (room_id)    REFERENCES rooms(id) ON DELETE CASCADE,
             FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -81,15 +82,36 @@ def init_db():
             teacher_argument REAL    DEFAULT 0,
             teacher_overall  REAL    DEFAULT 0,
             reviewed_at      TEXT    DEFAULT NULL,
+            ai_grammar       REAL    DEFAULT 0,
+            ai_coherence     REAL    DEFAULT 0,
+            ai_argument      REAL    DEFAULT 0,
+            ai_overall       REAL    DEFAULT 0,
+            ai_feedback      TEXT    DEFAULT '',
+            ai_reviewed_at   TEXT    DEFAULT NULL,
             FOREIGN KEY (room_id)    REFERENCES rooms(id)  ON DELETE CASCADE,
             FOREIGN KEY (student_id) REFERENCES users(id)  ON DELETE CASCADE
         )
     """)
-    # Add role column if migrating from older schema
-    try:
-        cur.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'student'")
-    except sqlite3.OperationalError:
-        pass  # column already exists
+    # Migrations for older schemas
+    migrations = [
+        "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'student'",
+        "ALTER TABLE room_members ADD COLUMN status TEXT DEFAULT 'pending'",
+        "ALTER TABLE room_essays ADD COLUMN ai_grammar REAL DEFAULT 0",
+        "ALTER TABLE room_essays ADD COLUMN ai_coherence REAL DEFAULT 0",
+        "ALTER TABLE room_essays ADD COLUMN ai_argument REAL DEFAULT 0",
+        "ALTER TABLE room_essays ADD COLUMN ai_overall REAL DEFAULT 0",
+        "ALTER TABLE room_essays ADD COLUMN ai_feedback TEXT DEFAULT ''",
+        "ALTER TABLE room_essays ADD COLUMN ai_reviewed_at TEXT DEFAULT NULL",
+    ]
+    for sql in migrations:
+        try:
+            cur.execute(sql)
+        except sqlite3.OperationalError:
+            pass
+    # Back-fill: existing members without status should be approved
+    cur.execute("UPDATE room_members SET status='approved' WHERE status IS NULL OR status=''")
+    # Set existing members without status to 'approved'
+    cur.execute("UPDATE room_members SET status = 'approved' WHERE status IS NULL OR status = ''")
     conn.commit()
     conn.close()
 
@@ -213,10 +235,19 @@ def create_room(teacher_id, name, description=""):
     conn.close()
     return None
 
+def delete_room(room_id, teacher_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM rooms WHERE id = ? AND teacher_id = ?", (room_id, teacher_id))
+    conn.commit()
+    success = cur.rowcount > 0
+    conn.close()
+    return success
+
 def get_teacher_rooms(teacher_id):
     conn = get_connection()
     rows = conn.execute(
-        """SELECT r.*, COUNT(rm.id) AS student_count
+        """SELECT r.*, COUNT(CASE WHEN rm.status = 'approved' THEN 1 END) AS student_count
            FROM rooms r
            LEFT JOIN room_members rm ON rm.room_id = r.id
            WHERE r.teacher_id = ?
@@ -239,16 +270,26 @@ def get_room_by_code(room_code):
     conn.close()
     return dict(row) if row else None
 
-def get_room_members(room_id):
+def get_room_members(room_id, status_filter=None):
     conn = get_connection()
-    rows = conn.execute(
-        """SELECT u.id, u.username, u.full_name, u.email, rm.joined_at
-           FROM room_members rm
-           JOIN users u ON u.id = rm.student_id
-           WHERE rm.room_id = ?
-           ORDER BY rm.joined_at DESC""",
-        (room_id,),
-    ).fetchall()
+    if status_filter:
+        rows = conn.execute(
+            """SELECT u.id, u.username, u.full_name, u.email, rm.joined_at, rm.status
+               FROM room_members rm
+               JOIN users u ON u.id = rm.student_id
+               WHERE rm.room_id = ? AND rm.status = ?
+               ORDER BY rm.joined_at DESC""",
+            (room_id, status_filter),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """SELECT u.id, u.username, u.full_name, u.email, rm.joined_at, rm.status
+               FROM room_members rm
+               JOIN users u ON u.id = rm.student_id
+               WHERE rm.room_id = ?
+               ORDER BY rm.joined_at DESC""",
+            (room_id,),
+        ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -279,11 +320,49 @@ def remove_room_member(room_id, student_id):
 def is_room_member(room_id, student_id):
     conn = get_connection()
     row = conn.execute(
-        "SELECT id FROM room_members WHERE room_id = ? AND student_id = ?",
+        "SELECT id, status FROM room_members WHERE room_id = ? AND student_id = ?",
+        (room_id, student_id),
+    ).fetchone()
+    conn.close()
+    if row is None:
+        return None  # not a member at all
+    return dict(row)
+
+def is_approved_member(room_id, student_id):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT id FROM room_members WHERE room_id = ? AND student_id = ? AND status = 'approved'",
         (room_id, student_id),
     ).fetchone()
     conn.close()
     return row is not None
+
+def approve_room_member(room_id, student_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE room_members SET status = 'approved' WHERE room_id = ? AND student_id = ?",
+        (room_id, student_id)
+    )
+    conn.commit()
+    affected = cur.rowcount
+    conn.close()
+    return affected > 0
+
+def reject_room_member(room_id, student_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "DELETE FROM room_members WHERE room_id = ? AND student_id = ? AND status = 'pending'",
+        (room_id, student_id)
+    )
+    conn.commit()
+    affected = cur.rowcount
+    conn.close()
+    return affected > 0
+
+def get_pending_members(room_id):
+    return get_room_members(room_id, status_filter='pending')
 
 # ──────────────────── Room Essay operations ────────────────────
 def submit_room_essay(room_id, student_id, title, content):
@@ -302,9 +381,11 @@ def submit_room_essay(room_id, student_id, title, content):
 def get_room_essays(room_id):
     conn = get_connection()
     rows = conn.execute(
-        """SELECT re.*, u.username, u.full_name
+        """SELECT re.*, u.username, u.full_name,
+           CASE WHEN rm.id IS NULL THEN 1 ELSE 0 END AS is_archived
            FROM room_essays re
            JOIN users u ON u.id = re.student_id
+           LEFT JOIN room_members rm ON rm.room_id = re.room_id AND rm.student_id = re.student_id
            WHERE re.room_id = ?
            ORDER BY re.submitted_at DESC""",
         (room_id,),
@@ -339,10 +420,73 @@ def save_teacher_review(essay_id, review, grammar, coherence, argument, overall)
     conn.close()
     return affected > 0
 
+def save_ai_review(essay_id, feedback, grammar, coherence, argument, overall):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """UPDATE room_essays
+           SET ai_feedback = ?, ai_grammar = ?, ai_coherence = ?,
+               ai_argument = ?, ai_overall = ?, ai_reviewed_at = datetime('now')
+           WHERE id = ?""",
+        (feedback, grammar, coherence, argument, overall, essay_id),
+    )
+    conn.commit()
+    affected = cur.rowcount
+    conn.close()
+    return affected > 0
+
+# ──────────────────── Essay Management (History, Delete, Resubmit) ────────────────────
+
+def clear_room_history(room_id):
+    """Delete all essays for students no longer in the room."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """DELETE FROM room_essays
+           WHERE room_id = ? AND student_id NOT IN (
+               SELECT student_id FROM room_members WHERE room_id = ?
+           )""",
+        (room_id, room_id)
+    )
+    conn.commit()
+    count = cur.rowcount
+    conn.close()
+    return count
+
+def delete_essay(essay_id, student_id):
+    """Delete a specific essay by a student."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "DELETE FROM room_essays WHERE id = ? AND student_id = ?",
+        (essay_id, student_id)
+    )
+    conn.commit()
+    success = cur.rowcount > 0
+    conn.close()
+    return success
+
+def resubmit_essay(essay_id, student_id, title, content):
+    """Resubmit an essay, resetting all reviews and updating content."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """UPDATE room_essays
+           SET title = ?, content = ?, submitted_at = datetime('now'),
+               teacher_review = '', teacher_grammar = 0, teacher_coherence = 0, teacher_argument = 0, teacher_overall = 0, reviewed_at = NULL,
+               ai_grammar = 0, ai_coherence = 0, ai_argument = 0, ai_overall = 0, ai_feedback = '', ai_reviewed_at = NULL
+           WHERE id = ? AND student_id = ?""",
+        (title, content, essay_id, student_id)
+    )
+    conn.commit()
+    success = cur.rowcount > 0
+    conn.close()
+    return success
+
 def get_student_rooms(student_id):
     conn = get_connection()
     rows = conn.execute(
-        """SELECT r.*, u.full_name AS teacher_name
+        """SELECT r.*, u.full_name AS teacher_name, rm.status
            FROM room_members rm
            JOIN rooms r ON r.id = rm.room_id
            JOIN users u ON u.id = r.teacher_id
