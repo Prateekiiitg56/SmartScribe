@@ -62,6 +62,8 @@ const TeacherDashboard = () => {
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
     const [copied, setCopied] = useState(false);
+    const [essayTab, setEssayTab] = useState('active'); // active | history
+    const [evalConfig, setEvalConfig] = useState({ min_words: 0, style: 'any' }); // missing evaluation configuration
 
     const fetchRooms = async () => { try { setRooms(await apiCall('/rooms')); } catch { } };
     const fetchStats = async () => { try { setStats(await apiCall('/teacher/dashboard/stats')); } catch { } };
@@ -109,6 +111,47 @@ const TeacherDashboard = () => {
         } catch (e) { setMsg(e.message); }
     };
 
+    const clearHistory = async () => {
+        if (!window.confirm("Are you sure you want to delete all archived essays?")) return;
+        setLoading(true);
+        try {
+            await apiCall(`/rooms/${activeRoom.id}/history`, { method: 'DELETE' });
+            openRoom(activeRoom.id);
+        } catch (e) { setMsg(e.message); }
+        setLoading(false);
+    };
+
+    const deleteRoom = async () => {
+        if (!window.confirm(`Are you sure you want to delete room "${activeRoom.name}" and all its data? This cannot be undone.`)) return;
+        setLoading(true);
+        try {
+            await apiCall(`/rooms/${activeRoom.id}`, { method: 'DELETE' });
+            setMsg('Room deleted successfully');
+            setView('list');
+            fetchRooms();
+            fetchStats();
+        } catch (e) { setMsg(e.message); }
+        setLoading(false);
+    };
+
+    const approveMember = async (sid) => {
+        setLoading(true);
+        try {
+            await apiCall(`/rooms/${activeRoom.id}/members/${sid}/approve`, { method: 'POST' });
+            openRoom(activeRoom.id);
+        } catch (e) { setMsg(e.message); }
+        setLoading(false);
+    };
+
+    const rejectMember = async (sid) => {
+        setLoading(true);
+        try {
+            await apiCall(`/rooms/${activeRoom.id}/members/${sid}/reject`, { method: 'POST' });
+            openRoom(activeRoom.id);
+        } catch (e) { setMsg(e.message); }
+        setLoading(false);
+    };
+
     const openEssay = async (essayId) => {
         setLoading(true);
         try {
@@ -133,6 +176,29 @@ const TeacherDashboard = () => {
             setMsg('Review submitted!');
             openRoom(activeRoom.id);
             setView('room');
+        } catch (e) { setMsg(e.message); }
+        setLoading(false);
+    };
+
+    const runAiReview = async (type = 'ai') => {
+        setLoading(true);
+        setMsg(`Running ${type === 'ai' ? 'AI' : 'Local Model'} evaluation...`);
+        try {
+            const ep = type === 'ai' ? 'ai-review' : 'hf-review';
+            const res = await apiCall(`/rooms/${activeRoom.id}/essays/${activeEssay.id}/${ep}`, {
+                method: 'POST',
+                body: JSON.stringify(evalConfig)
+            });
+            setMsg(`Evaluation complete!`);
+            // Automatically fill slider scores with the returned values
+            const scores = res.ai_scores || res.hf_scores;
+            setReview({
+                grammar: Math.round(scores.grammar),
+                coherence: Math.round(scores.coherence),
+                argument: Math.round(scores.argumentation || scores.argument),
+                overall: Math.round(res.overall || scores.overall),
+                review: res.feedback || (scores.feedback || `Evaluated by ${type.toUpperCase()}`)
+            });
         } catch (e) { setMsg(e.message); }
         setLoading(false);
     };
@@ -193,7 +259,41 @@ const TeacherDashboard = () => {
                     <ScoreSlider label="Coherence" value={review.coherence} onChange={(v) => setReview({ ...review, coherence: v })} />
                     <ScoreSlider label="Argumentation" value={review.argument} onChange={(v) => setReview({ ...review, argument: v })} />
                     <ScoreSlider label="Overall" value={review.overall} onChange={(v) => setReview({ ...review, overall: v })} />
-                    <div style={{ marginTop: '1rem' }}>
+
+                    <div style={{ marginTop: '1.5rem', marginBottom: '1rem', padding: '1rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                        <div style={{ marginBottom: '0.8rem' }}>
+                            <label style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-soft)', display: 'block', marginBottom: 6 }}>Min Words</label>
+                            <input type="number"
+                                value={evalConfig.min_words}
+                                onChange={(e) => setEvalConfig({ ...evalConfig, min_words: parseInt(e.target.value) || 0 })}
+                                style={{ ...inputStyle, padding: '0.5rem', fontSize: '0.8rem' }}
+                                min={0}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-soft)', display: 'block', marginBottom: 6 }}>Style</label>
+                            <select
+                                value={evalConfig.style}
+                                onChange={(e) => setEvalConfig({ ...evalConfig, style: e.target.value })}
+                                style={{ ...inputStyle, padding: '0.5rem', fontSize: '0.8rem', cursor: 'pointer' }}
+                            >
+                                <option value="any">Any (Standard)</option>
+                                <option value="formal">Formal</option>
+                                <option value="informal">Informal</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.8rem', marginBottom: '1rem' }}>
+                        <button onClick={() => runAiReview('ai')} disabled={loading} style={{ ...btnOutline, flex: 1, padding: '0.5rem', fontSize: '0.6rem', justifyContent: 'center' }}>
+                            SmartScribe AI
+                        </button>
+                        <button onClick={() => runAiReview('hf')} disabled={loading} style={{ ...btnOutline, flex: 1, padding: '0.5rem', fontSize: '0.6rem', justifyContent: 'center', borderColor: '#8b5cf6', color: '#8b5cf6' }}>
+                            Local Model (HF)
+                        </button>
+                    </div>
+
+                    <div style={{ marginTop: '0.5rem' }}>
                         <label style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-soft)', display: 'block', marginBottom: 8 }}>Feedback</label>
                         <textarea
                             value={review.review}
@@ -216,9 +316,14 @@ const TeacherDashboard = () => {
         <div style={{ padding: '140px 8% 80px', minHeight: '100vh' }}>
             {msg && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ position: 'fixed', top: 100, right: 40, zIndex: 9999, background: BLUE, color: '#fff', padding: '0.8rem 1.5rem', borderRadius: 8, fontFamily: 'var(--mono)', fontSize: '0.7rem' }}>{msg}</motion.div>}
 
-            <button onClick={() => { setView('list'); fetchRooms(); fetchStats(); }} style={{ ...btnOutline, marginBottom: '2rem', padding: '0.6rem 1.2rem', fontSize: '0.65rem' }}>
-                <ArrowLeft size={14} /> All Rooms
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                <button onClick={() => { setView('list'); fetchRooms(); fetchStats(); }} style={{ ...btnOutline, padding: '0.6rem 1.2rem', fontSize: '0.65rem' }}>
+                    <ArrowLeft size={14} /> All Rooms
+                </button>
+                <button onClick={deleteRoom} disabled={loading} style={{ ...btnOutline, padding: '0.6rem 1.2rem', fontSize: '0.65rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}>
+                    <Trash2 size={14} style={{ marginRight: 6 }} /> Delete Room
+                </button>
+            </div>
 
             {/* Room header */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ ...card, cursor: 'default', marginBottom: '2rem' }}>
@@ -257,6 +362,26 @@ const TeacherDashboard = () => {
                         )}
                     </AnimatePresence>
 
+                    {activeRoom.pending_members && activeRoom.pending_members.length > 0 && (
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <div style={{ fontFamily: 'var(--mono)', fontSize: '0.6rem', color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>Pending Approvals</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                {activeRoom.pending_members.map(m => (
+                                    <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.8rem', background: 'rgba(248, 113, 113, 0.05)', borderRadius: 6, border: '1px solid rgba(248, 113, 113, 0.2)' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 600, fontSize: '0.75rem' }}>{m.full_name || m.username}</div>
+                                            <div style={{ fontFamily: 'var(--mono)', fontSize: '0.55rem', color: 'var(--muted)' }}>@{m.username}</div>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 6 }}>
+                                            <button onClick={() => approveMember(m.id)} style={{ ...btnOutline, padding: '0.3rem 0.6rem', fontSize: '0.55rem', color: '#6ECB8A', borderColor: 'rgba(110,203,138,0.3)' }}>Approve</button>
+                                            <button onClick={() => rejectMember(m.id)} style={{ ...btnOutline, padding: '0.3rem 0.6rem', fontSize: '0.55rem', color: '#f87171', borderColor: 'rgba(248,113,113,0.3)' }}>Reject</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {(activeRoom.members || []).length === 0 ? (
                         <p style={{ color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: '0.75rem', textAlign: 'center', padding: '2rem 0' }}>No students yet. Share the room code!</p>
                     ) : (
@@ -278,19 +403,36 @@ const TeacherDashboard = () => {
 
                 {/* Essays panel */}
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} style={{ ...card, cursor: 'default' }}>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8, marginBottom: '1.5rem' }}><FileText size={18} color={BLUE} /> Submitted Essays ({activeRoom.essays?.length || 0})</h3>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}><FileText size={18} color={BLUE} /> Submitted Essays</h3>
+                        <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(74,144,217,0.1)', padding: '0.2rem', borderRadius: 8 }}>
+                            <button onClick={() => setEssayTab('active')} style={{ ...btnOutline, border: 'none', padding: '0.4rem 0.8rem', fontSize: '0.6rem', color: essayTab === 'active' ? '#fff' : BLUE, background: essayTab === 'active' ? BLUE : 'transparent' }}>Active</button>
+                            <button onClick={() => setEssayTab('history')} style={{ ...btnOutline, border: 'none', padding: '0.4rem 0.8rem', fontSize: '0.6rem', color: essayTab === 'history' ? '#fff' : BLUE, background: essayTab === 'history' ? BLUE : 'transparent' }}>History</button>
+                        </div>
+                    </div>
 
-                    {(activeRoom.essays || []).length === 0 ? (
-                        <p style={{ color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: '0.75rem', textAlign: 'center', padding: '2rem 0' }}>No essays submitted yet.</p>
+                    {essayTab === 'history' && (
+                        <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+                            <button onClick={clearHistory} disabled={loading || !(activeRoom.essays || []).filter(e => e.is_archived).length} style={{ ...btnOutline, padding: '0.4rem 0.8rem', fontSize: '0.6rem', color: 'rgba(239,68,68,0.8)', borderColor: 'rgba(239,68,68,0.3)' }}>
+                                <Trash2 size={12} style={{ marginRight: 4 }} /> Clear History
+                            </button>
+                        </div>
+                    )}
+
+                    {(activeRoom.essays || []).filter(e => essayTab === 'history' ? e.is_archived : !e.is_archived).length === 0 ? (
+                        <p style={{ color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: '0.75rem', textAlign: 'center', padding: '2rem 0' }}>
+                            {essayTab === 'history' ? 'No archived essays.' : 'No active essays submitted yet.'}
+                        </p>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                            {(activeRoom.essays || []).map((e) => (
+                            {(activeRoom.essays || []).filter(e => essayTab === 'history' ? e.is_archived : !e.is_archived).map((e) => (
                                 <div key={e.id} onClick={() => openEssay(e.id)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'rgba(74,144,217,0.04)', borderRadius: 8, border: `1px solid ${BLUE_DIM}`, cursor: 'pointer', transition: 'all 0.3s' }}>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 4 }}>{e.title}</div>
                                         <div style={{ fontFamily: 'var(--mono)', fontSize: '0.6rem', color: 'var(--muted)' }}>by {e.full_name || e.username} · {new Date(e.submitted_at).toLocaleDateString()}</div>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        {e.is_archived && <span style={{ ...badge, background: 'rgba(100,100,100,0.15)', color: '#888' }}>Archived</span>}
                                         {e.reviewed_at ? (
                                             <span style={{ ...badge, background: 'rgba(110,203,138,0.15)', color: '#6ECB8A' }}><CheckCircle size={10} /> Reviewed</span>
                                         ) : (

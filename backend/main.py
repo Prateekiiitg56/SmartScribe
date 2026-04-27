@@ -47,10 +47,16 @@ class GoogleAuth(BaseModel):
     name: str = ""
     sub: str = ""
 
+class EvalConfig(BaseModel):
+    min_words: int = 0
+    style: str = "any"
+
 class EssaySubmit(BaseModel):
     title: str
     content: str
     mode: str = "Standard"
+    min_words: int = 0
+    style: str = "any"
 
 class AskAI(BaseModel):
     question: str
@@ -231,7 +237,7 @@ async def teacher_stats(teacher_id: int = Depends(auth.get_current_teacher_id)):
 # ──────────────────── Evaluation Routes ────────────────────
 @app.post("/api/evaluate")
 async def evaluate_essay(essay: EssaySubmit, user_id: int = Depends(auth.get_current_user_id)):
-    result = ai.get_ai_evaluation(essay.title, essay.content, essay.mode)
+    result = ai.get_ai_evaluation(essay.title, essay.content, essay.mode, essay.min_words, essay.style)
 
     essay_id = db.save_essay(
         user_id=user_id,
@@ -293,9 +299,10 @@ async def get_room(room_id: int, teacher_id: int = Depends(auth.get_current_teac
     room = db.get_room_by_id(room_id)
     if not room or room["teacher_id"] != teacher_id:
         raise HTTPException(status_code=404, detail="Room not found.")
-    members = db.get_room_members(room_id)
+    members = db.get_room_members(room_id, status_filter='approved')
+    pending = db.get_pending_members(room_id)
     essays = db.get_room_essays(room_id)
-    return {**room, "members": members, "essays": essays}
+    return {**room, "members": members, "pending_members": pending, "essays": essays}
 
 @app.post("/api/rooms/{room_id}/members")
 async def add_member(room_id: int, body: AddMember, teacher_id: int = Depends(auth.get_current_teacher_id)):
@@ -312,7 +319,31 @@ async def add_member(room_id: int, body: AddMember, teacher_id: int = Depends(au
     success = db.add_room_member(room_id, student["id"])
     if not success:
         raise HTTPException(status_code=400, detail="Student is already a member of this room.")
+    # Teacher-initiated add = auto-approve
+    db.approve_room_member(room_id, student["id"])
     return {"message": f"Student '{body.username}' added to room."}
+
+@app.post("/api/rooms/{room_id}/members/{student_id}/approve")
+async def approve_member(room_id: int, student_id: int, teacher_id: int = Depends(auth.get_current_teacher_id)):
+    room = db.get_room_by_id(room_id)
+    if not room or room["teacher_id"] != teacher_id:
+        raise HTTPException(status_code=404, detail="Room not found.")
+
+    success = db.approve_room_member(room_id, student_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="No pending request found.")
+    return {"message": "Student approved."}
+
+@app.post("/api/rooms/{room_id}/members/{student_id}/reject")
+async def reject_member(room_id: int, student_id: int, teacher_id: int = Depends(auth.get_current_teacher_id)):
+    room = db.get_room_by_id(room_id)
+    if not room or room["teacher_id"] != teacher_id:
+        raise HTTPException(status_code=404, detail="Room not found.")
+
+    success = db.reject_room_member(room_id, student_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="No pending request found.")
+    return {"message": "Student rejected."}
 
 @app.delete("/api/rooms/{room_id}/members/{student_id}")
 async def remove_member(room_id: int, student_id: int, teacher_id: int = Depends(auth.get_current_teacher_id)):
@@ -358,6 +389,85 @@ async def review_essay(room_id: int, essay_id: int, body: TeacherReview, teacher
         raise HTTPException(status_code=500, detail="Failed to save review.")
     return {"message": "Review submitted successfully."}
 
+@app.post("/api/rooms/{room_id}/essays/{essay_id}/ai-review")
+async def ai_review_essay(room_id: int, essay_id: int, config: EvalConfig, teacher_id: int = Depends(auth.get_current_teacher_id)):
+    """Run AI evaluation on a room essay (uses the same AI engine as the main evaluate)."""
+    room = db.get_room_by_id(room_id)
+    if not room or room["teacher_id"] != teacher_id:
+        raise HTTPException(status_code=404, detail="Room not found.")
+
+    essay = db.get_room_essay_by_id(essay_id)
+    if not essay or essay["room_id"] != room_id:
+        raise HTTPException(status_code=404, detail="Essay not found.")
+
+    # Run AI evaluation
+    result = ai.get_ai_evaluation(essay["title"], essay["content"], "Academic", config.min_words, config.style)
+
+    # Save AI scores
+    db.save_ai_review(
+        essay_id=essay_id,
+        feedback=result.get("feedback", ""),
+        grammar=result.get("grammar", 0),
+        coherence=result.get("coherence", 0),
+        argument=result.get("argumentation", 0),
+        overall=result.get("overall", 0)
+    )
+
+    return {"message": "AI review completed.", "ai_scores": result}
+
+@app.post("/api/rooms/{room_id}/essays/{essay_id}/hf-review")
+async def hf_review_essay(room_id: int, essay_id: int, config: EvalConfig, teacher_id: int = Depends(auth.get_current_teacher_id)):
+    """Run local HuggingFace transformer evaluation on a room essay."""
+    room = db.get_room_by_id(room_id)
+    if not room or room["teacher_id"] != teacher_id:
+        raise HTTPException(status_code=404, detail="Room not found.")
+
+    essay = db.get_room_essay_by_id(essay_id)
+    if not essay or essay["room_id"] != room_id:
+        raise HTTPException(status_code=404, detail="Essay not found.")
+
+    # Run HuggingFace-only evaluation (transformer scores)
+    try:
+        hf_scores = ai.get_transformer_scores(essay["content"], config.min_words, config.style)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"HuggingFace evaluation failed: {str(e)}")
+
+    grammar_score = hf_scores.get("grammar", 70)
+    coherence_score = hf_scores.get("coherence", 70)
+    argument_score = hf_scores.get("argument", 70)
+    overall_score = hf_scores.get("overall", 70)
+    feedback_text = hf_scores.get("feedback", "")
+    feedback = f"{feedback_text}\n\nHuggingFace Transformer Evaluation:\n- Grammar: {grammar_score}/100\n- Coherence: {coherence_score}/100\n- Argumentation: {argument_score}/100\n- Overall: {overall_score}/100"
+
+    db.save_ai_review(
+        essay_id=essay_id,
+        feedback=feedback,
+        grammar=grammar_score,
+        coherence=coherence_score,
+        argument=argument_score,
+        overall=overall_score
+    )
+
+    return {"message": "HuggingFace review completed.", "hf_scores": hf_scores, "overall": overall_score}
+
+@app.delete("/api/rooms/{room_id}")
+async def delete_room(room_id: int, teacher_id: int = Depends(auth.get_current_teacher_id)):
+    """Teacher deletes an entire room."""
+    success = db.delete_room(room_id, teacher_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Room not found or you don't have permission.")
+    return {"message": "Room deleted successfully."}
+
+@app.delete("/api/rooms/{room_id}/history")
+async def clear_room_history(room_id: int, teacher_id: int = Depends(auth.get_current_teacher_id)):
+    """Delete all archived essays for students who are no longer in the room."""
+    room = db.get_room_by_id(room_id)
+    if not room or room["teacher_id"] != teacher_id:
+        raise HTTPException(status_code=404, detail="Room not found.")
+    
+    count = db.clear_room_history(room_id)
+    return {"message": f"Cleared {count} archived essay(s) from history."}
+
 # ──────────────────── Student Room Routes ────────────────────
 @app.post("/api/student/rooms/join")
 async def join_room(body: JoinRoom, student_id: int = Depends(auth.get_current_user_id)):
@@ -365,10 +475,14 @@ async def join_room(body: JoinRoom, student_id: int = Depends(auth.get_current_u
     if not room:
         raise HTTPException(status_code=404, detail="Invalid room code.")
 
-    success = db.add_room_member(room["id"], student_id)
-    if not success:
+    existing = db.is_room_member(room["id"], student_id)
+    if existing:
+        if existing["status"] == "pending":
+            raise HTTPException(status_code=400, detail="Your join request is pending teacher approval.")
         raise HTTPException(status_code=400, detail="You are already a member of this room.")
-    return {"message": f"Joined room '{room['name']}'.", "room_id": room["id"]}
+
+    db.add_room_member(room["id"], student_id)  # status defaults to 'pending'
+    return {"message": f"Join request sent for room '{room['name']}'. Waiting for teacher approval.", "room_id": room["id"]}
 
 @app.get("/api/student/rooms")
 async def student_list_rooms(student_id: int = Depends(auth.get_current_user_id)):
@@ -376,22 +490,72 @@ async def student_list_rooms(student_id: int = Depends(auth.get_current_user_id)
 
 @app.get("/api/student/rooms/{room_id}")
 async def student_get_room(room_id: int, student_id: int = Depends(auth.get_current_user_id)):
-    if not db.is_room_member(room_id, student_id):
+    membership = db.is_room_member(room_id, student_id)
+    if not membership:
         raise HTTPException(status_code=403, detail="You are not a member of this room.")
+    if membership["status"] == "pending":
+        room = db.get_room_by_id(room_id)
+        return {**(room or {}), "status": "pending", "essays": []}
     room = db.get_room_by_id(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found.")
     essays = db.get_student_room_essays(room_id, student_id)
-    return {**room, "essays": essays}
+    return {**room, "status": "approved", "essays": essays}
+
+@app.delete("/api/student/rooms/{room_id}/leave")
+async def student_leave_room(room_id: int, student_id: int = Depends(auth.get_current_user_id)):
+    """Student leaves a room."""
+    # Ensure they are actually a member first to provide accurate feedback
+    if not db.is_room_member(room_id, student_id):
+        raise HTTPException(status_code=404, detail="You are not a member of this room.")
+    
+    success = db.remove_room_member(room_id, student_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to leave room.")
+    return {"message": "Left room successfully."}
 
 @app.post("/api/student/rooms/{room_id}/essays")
 async def student_submit_essay(room_id: int, body: RoomEssaySubmit, student_id: int = Depends(auth.get_current_user_id)):
-    if not db.is_room_member(room_id, student_id):
-        raise HTTPException(status_code=403, detail="You are not a member of this room.")
+    if not db.is_approved_member(room_id, student_id):
+        raise HTTPException(status_code=403, detail="You must be approved to submit essays.")
 
     essay_id = db.submit_room_essay(room_id, student_id, body.title, body.content)
     return {"message": "Essay submitted.", "essay_id": essay_id}
 
+@app.get("/api/student/rooms/{room_id}/essays/{essay_id}")
+async def student_get_essay(room_id: int, essay_id: int, student_id: int = Depends(auth.get_current_user_id)):
+    """Students can view the full details of their own essay, including any reviews."""
+    if not db.is_room_member(room_id, student_id):
+        raise HTTPException(status_code=403, detail="You are not a member of this room.")
+    essay = db.get_room_essay_by_id(essay_id)
+    if not essay or essay["room_id"] != room_id or essay["student_id"] != student_id:
+        raise HTTPException(status_code=404, detail="Essay not found.")
+    return essay
+
+@app.delete("/api/student/rooms/{room_id}/essays/{essay_id}")
+async def student_delete_essay(room_id: int, essay_id: int, student_id: int = Depends(auth.get_current_user_id)):
+    """Students can delete their own essay."""
+    # Note: Even if they left the room, they still wrote it, but let's check membership to be safe
+    if not db.is_room_member(room_id, student_id):
+        raise HTTPException(status_code=403, detail="You are not a member of this room.")
+    
+    success = db.delete_essay(essay_id, student_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Essay not found or could not be deleted.")
+    return {"message": "Essay deleted successfully."}
+
+@app.put("/api/student/rooms/{room_id}/essays/{essay_id}")
+async def student_resubmit_essay(room_id: int, essay_id: int, body: RoomEssaySubmit, student_id: int = Depends(auth.get_current_user_id)):
+    """Students can edit/resubmit their essay, which resets any reviews."""
+    if not db.is_approved_member(room_id, student_id):
+        raise HTTPException(status_code=403, detail="You must be approved to submit/edit essays.")
+        
+    success = db.resubmit_essay(essay_id, student_id, body.title, body.content)
+    if not success:
+        raise HTTPException(status_code=404, detail="Essay not found or could not be updated.")
+    return {"message": "Essay updated successfully."}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
