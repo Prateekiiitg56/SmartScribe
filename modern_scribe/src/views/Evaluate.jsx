@@ -71,7 +71,7 @@ const FormattedResponse = ({ text, accent }) => {
                     return (
                         <div key={i} style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
                             <span style={{ color: accent, fontFamily: 'var(--mono)', fontSize: '0.7rem', fontWeight: 700, marginTop: '0.12rem', flexShrink: 0 }}>{trimmed.match(/^\d+/)[0]}.</span>
-                            <p style={{ fontSize: '0.8rem', color: 'rgba(240,235,224,0.8)', lineHeight: 1.7, margin: 0 }}>{trimmed.replace(/^\d+\.\s*/, '')}</p>
+                            <p style={{ fontSize: '0.8rem', color: 'var(--text-soft)', lineHeight: 1.7, margin: 0 }}>{trimmed.replace(/^\d+\.\s*/, '')}</p>
                         </div>
                     );
                 if (trimmed.startsWith('**') && trimmed.endsWith('**'))
@@ -80,13 +80,13 @@ const FormattedResponse = ({ text, accent }) => {
                     return (
                         <div key={i} style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
                             <span style={{ color: accent, marginTop: '0.15rem', flexShrink: 0, fontSize: '0.65rem' }}>▸</span>
-                            <p style={{ fontSize: '0.8rem', color: 'rgba(240,235,224,0.8)', lineHeight: 1.7, margin: 0 }}>{trimmed.slice(2)}</p>
+                            <p style={{ fontSize: '0.8rem', color: 'var(--text-soft)', lineHeight: 1.7, margin: 0 }}>{trimmed.slice(2)}</p>
                         </div>
                     );
                 // Inline bold support
                 const parts = trimmed.split(/(\*\*.*?\*\*)/g);
                 return (
-                    <p key={i} style={{ fontSize: '0.8rem', color: 'rgba(240,235,224,0.72)', lineHeight: 1.8, margin: 0 }}>
+                    <p key={i} style={{ fontSize: '0.8rem', color: 'var(--text-soft)', lineHeight: 1.8, margin: 0 }}>
                         {parts.map((part, j) => part.startsWith('**') && part.endsWith('**')
                             ? <strong key={j} style={{ color: 'var(--paper)', fontWeight: 700 }}>{part.slice(2, -2)}</strong>
                             : part
@@ -104,7 +104,7 @@ const AcademicMetric = ({ label, value, suffix, icon: Icon, color, hint, invert 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                 <Icon size={12} color={color} />
-                <span style={{ fontFamily: 'var(--mono)', fontSize: '0.57rem', color: 'rgba(240,235,224,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</span>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: '0.57rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</span>
             </div>
             <span style={{ fontFamily: 'var(--serif)', fontSize: '1rem', fontWeight: 800, color }}>{value}{suffix}</span>
         </div>
@@ -277,7 +277,7 @@ const ModernEvaluate = () => {
                                     background: active ? `${m.accent}18` : 'rgba(255,255,255,0.03)',
                                     border: `1px solid ${active ? m.accent : 'rgba(255,255,255,0.08)'}`,
                                     borderRadius: '100px', cursor: 'pointer',
-                                    color: active ? m.accent : 'rgba(240,235,224,0.5)',
+                                    color: active ? m.accent : 'var(--text-dim)',
                                     fontFamily: 'var(--mono)', fontSize: '0.65rem',
                                     textTransform: 'uppercase', letterSpacing: '0.1em',
                                     transition: 'all 0.3s cubic-bezier(0.16,1,0.3,1)',
@@ -377,7 +377,7 @@ const ModernEvaluate = () => {
                             style={{
                                 width: '100%', minHeight: '380px',
                                 background: 'transparent', border: 'none',
-                                color: 'rgba(240,235,224,0.88)',
+                                color: 'var(--paper)',
                                 fontFamily: 'var(--body)', fontSize: '1.05rem',
                                 lineHeight: '2', outline: 'none', resize: 'none',
                                 opacity: isEvaluating ? 0.25 : 1, transition: 'opacity 0.4s',
@@ -451,7 +451,7 @@ const ModernEvaluate = () => {
 
                                 {/* Summary sentence */}
                                 {result.feedback_summary && (
-                                    <p style={{ fontSize: '0.92rem', color: 'rgba(240,235,224,0.7)', lineHeight: 1.8, fontFamily: 'var(--body)', fontStyle: 'italic', marginBottom: '2rem', maxWidth: '700px' }}>
+                                    <p style={{ fontSize: '0.92rem', color: 'var(--text-soft)', lineHeight: 1.8, fontFamily: 'var(--body)', fontStyle: 'italic', marginBottom: '2rem', maxWidth: '700px' }}>
                                         "{result.feedback_summary}"
                                     </p>
                                 )}

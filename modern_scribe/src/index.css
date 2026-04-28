@@ -249,7 +249,7 @@ button {
   align-items: flex-start;
   margin-bottom: 0.7rem;
   font-size: 0.82rem;
-  color: rgba(240, 235, 224, 0.78);
+  color: var(--text-soft);
   line-height: 1.75;
   font-family: var(--body);
 }
@@ -271,7 +271,7 @@ button {
   border-radius: 100px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.03);
-  color: rgba(240, 235, 224, 0.55);
+  color: var(--text-dim);
   cursor: pointer;
   transition: all 0.25s ease;
   white-space: nowrap;
@@ -279,7 +279,7 @@ button {
 
 .chip-button:hover {
   background: rgba(255, 255, 255, 0.07);
-  color: rgba(240, 235, 224, 0.85);
+  color: var(--text-soft);
   border-color: rgba(255, 255, 255, 0.2);
   transform: translateY(-1px);
 }
